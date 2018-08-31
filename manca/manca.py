@@ -20,6 +20,9 @@ import sys
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import argparse
+from copy import deepcopy
+from math import sqrt
+from scipy import stats
 
 def set_manca():
     """This parser gets input settings for running the manca clustering algorithm.
@@ -98,7 +101,8 @@ def manca():
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.')
     sys.stdout.flush()
 
-def cluster_graph(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000):
+
+def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -192,10 +196,10 @@ def cluster_graph(graph, limit=100, diff_range=3, max_clusters=5, iterations=100
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = bestcluster[i]
     nx.set_node_attributes(graph, clusdict, 'Cluster')
-    return graph
+    return graph, iterations, adj
 
 
-def central_graph(matrix, graph, iterations, percentage=10, test=False):
+def central_graph(matrix, graph, iterations, diff_range, percentage, test, bootstraps):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
@@ -208,8 +212,9 @@ def central_graph(matrix, graph, iterations, percentage=10, test=False):
     :param matrix: Outcome of diffusion process from cluster_graph.
     :param graph: NetworkX graph of a microbial association network.
     :param iterations: The number of iterations carried out by the clustering algorithm.
-    :param fraction: Diffusion range of network perturbation.
+    :param percentage: Diffusion range of network perturbation.
     :param test: If true, the matrix is compared to matrices generated from Klemm-Eguíluz matrices.
+    :param bootstraps: Number of bootstraps to carry out.
     :return: Networkx graph with hub ID / p-value as node property.
     """
     negthresh = np.percentile(matrix, percentage/2)
@@ -218,12 +223,20 @@ def central_graph(matrix, graph, iterations, percentage=10, test=False):
     poshubs = np.argwhere(matrix > posthresh)
 
     if test:
-        pass
+        boots = list()
+        for i in range(bootstraps):
+            bootstrap = null_graph(graph)
+            adj = np.zeros((len(graph.nodes), len(graph.nodes)))
+            for j in range(iterations):
+                adj = diffuse_graph(bootstrap, adj, diff_range)
+            boots.append(adj)
+        pvals = bootstrap_test(matrix, boots)
 
     # need to make sure graph is undirected
     graph = nx.to_undirected(graph)
     # initialize empty dictionary to store edge ID
     edge_vals = dict()
+    edge_pvals = dict()
     for edge in graph.edges:
         edge_vals[edge] = 'None'
     # need to convert matrix index to node ID
@@ -231,11 +244,14 @@ def central_graph(matrix, graph, iterations, percentage=10, test=False):
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'Negative hub'
+        edge_pvals[(node1, node2)] = pvals[node1, node2]
     for edge in poshubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'Positive hub'
+        edge_pvals[(node1, node2)] = pvals[node1, node2]
     nx.set_edge_attributes(graph, edge_vals, 'Hub ID')
+    nx.set_edge_attributes(graph, edge_pvals, 'Hub p-value')
 
 
 def diffuse_graph(graph, difmat, diff_range):
@@ -279,6 +295,74 @@ def diffuse_graph(graph, difmat, diff_range):
                     new_upper.append(next_diff)
         upper_diff = new_upper
     return difmat
+
+
+def null_graph(graph):
+    """
+    Returns a rewired copy of the original graph.
+    The rewiring procedure preserves degree
+    as well as connectedness.
+    The number of rewirings is the square of the node amount.
+    This ensures the network is completely randomized.
+    :param graph: Original graph.
+    :return: NetworkX graph
+    """
+    model = deepcopy(graph)
+    swaps = len(model.nodes) ** 2
+    nx.algorithms.connected_double_edge_swap(model, nswap=swaps)
+    return model
+
+def bootstrap_test(matrix, bootstraps):
+    """
+    Returns the p-values of the bootstrap procedure.
+    These p-values are generated from a 1-sided t-test.
+    The standard error calculation has been described
+    previously by Snijders & Borgatti, 1999.
+    Each score is considered an individual statistic in this case.
+    :param matrix: Matrix generated with diffuse_graph
+    :param bootstraps: Bootstrapped diffuse_graph matrices
+    :param index: Index of node of interest
+    :return: Matrix of p-values
+    """
+    mean_straps = np.mean(np.array(bootstraps), axis=0)
+    sums = list()
+    for strap in bootstraps:
+        boot = (strap - mean_straps) ** 2
+        sums.append(boot)
+    total_errors = np.sum(np.array(sums), axis = 0)
+    se = np.sqrt((1 / (len(bootstraps)-1))*total_errors)
+    t = (matrix - mean_straps) / se  # gives an error for edges that are 0
+    pvals = deepcopy(t)
+    for x in range(np.shape(matrix)[0]):
+        for y in range(np.shape(matrix)[1]):
+            tval = t[x,y]
+            if not np.isnan(tval):
+                pvals[x,y] = stats.t.sf(np.abs(tval), len(bootstraps) - 1)  # one-sided t-test
+            else:
+                pvals[x,y] = 0
+    return pvals
+
+
+def main(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
+          central=True, percentage=10, test=True, bootstraps=100):
+    """
+    Main function that carries out graph clusterning and calculates centralities.
+    :param graph: NetworkX graph to cluster. Needs to have edge weights.
+    :param limit: Number of iterations to run until alg considers sparsity value converged.
+    :param diff_range: Diffusion range of network perturbation.
+    :param max_clusters: Number of clusters to evaluate in K-means clustering.
+    :param iterations: If algorithm does not converge, it stops here.
+    :param central: If True, centrality values are calculated.
+    :param percentage: Percentage of hubs to return.
+    :param test: If True, centrality values are bootstrapped.
+    :param bootstraps: Number of bootstrap iterations.
+    :return:
+    """
+    graph, numbers, matrix = cluster_graph(graph, limit, diff_range, max_clusters, iterations)
+    if central:
+        central_graph(matrix, graph, numbers, diff_range,
+                      percentage, test, bootstraps)
+    return graph
 
 if __name__ == '__main__':
     manca()
