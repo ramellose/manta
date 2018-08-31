@@ -107,6 +107,9 @@ def cluster_graph(graph, limit=100, diff_range=3, max_clusters=5, iterations=100
     Setting diff_range to 1 means that the algorithm
     will basically cluster the adjacency matrix.
 
+    The min / max values that are the result of the diffusion process
+    are used as a centrality measure and define positive as well as negative hub species.
+
     Parameters
     ----------
     :param graph: Weighted, undirected networkx graph.
@@ -125,35 +128,11 @@ def cluster_graph(graph, limit=100, diff_range=3, max_clusters=5, iterations=100
     prev_sparsity = 0
     iters = 0
     while delay < limit and iters < iterations:
-        node = choice(list(graph.nodes))
-        # iterate over node neighbours across range
-        nbs = dict()
-        nbs[node] = 1.0
-        upper_diff = list()
-        upper_diff.append(nbs)
-        for i in range(diff_range):
-            # this loop specifies diffusion of weight value over the random node
-            new_upper = list()
-            for nbs in upper_diff:
-                for nb in nbs:
-                    new_nbs = graph.neighbors(nb)
-                    for new_nb in new_nbs:
-                        next_diff = dict()
-                        try:
-                            weight = graph.get_edge_data(nb, new_nb)['weight']
-                        except KeyError:
-                            sys.stdout.write('Edge did not have a weight attribute! Setting to 1.0')
-                            sys.stdout.flush()
-                            weight = 1.0
-                        next_diff[new_nb] = weight * nbs[nb]
-                        adj[adj_index[node], adj_index[new_nb]] += weight * nbs[nb]
-                        adj[adj_index[new_nb], adj_index[node]] += weight * nbs[nb] # undirected so both sides have weight added
-                        new_upper.append(next_diff)
-            upper_diff = new_upper
         # next part is to define clusters of the adj matrix
         # cluster number is defined through gap statistic
         # max cluster number to test is by default 5
         # define topscore and bestcluster for no cluster
+        adj = diffuse_graph(graph, adj, diff_range)
         topscore = 2
         bestcluster = None
         randomclust = np.random.randint(2, size=len(adj))
@@ -214,6 +193,92 @@ def cluster_graph(graph, limit=100, diff_range=3, max_clusters=5, iterations=100
         clusdict[list(graph.nodes)[i]] = bestcluster[i]
     nx.set_node_attributes(graph, clusdict, 'Cluster')
     return graph
+
+
+def central_graph(matrix, graph, iterations, percentage=10, test=False):
+    """
+    The min / max values that are the result of the diffusion process
+    are used as a centrality measure and define positive as well as negative hub associations.
+
+    If bootstrap is set to True, the hub species are bootstrapped.
+    The
+
+    Parameters
+    ----------
+    :param matrix: Outcome of diffusion process from cluster_graph.
+    :param graph: NetworkX graph of a microbial association network.
+    :param iterations: The number of iterations carried out by the clustering algorithm.
+    :param fraction: Diffusion range of network perturbation.
+    :param test: If true, the matrix is compared to matrices generated from Klemm-Eguíluz matrices.
+    :return: Networkx graph with hub ID / p-value as node property.
+    """
+    negthresh = np.percentile(matrix, percentage/2)
+    posthresh = np.percentile(matrix, 100-percentage/2)
+    neghubs = np.argwhere(matrix < negthresh)
+    poshubs = np.argwhere(matrix > posthresh)
+
+    if test:
+        pass
+
+    # need to make sure graph is undirected
+    graph = nx.to_undirected(graph)
+    # initialize empty dictionary to store edge ID
+    edge_vals = dict()
+    for edge in graph.edges:
+        edge_vals[edge] = 'None'
+    # need to convert matrix index to node ID
+    for edge in neghubs:
+        node1 = list(graph.nodes)[edge[0]]
+        node2 = list(graph.nodes)[edge[1]]
+        edge_vals[(node1, node2)] = 'Negative hub'
+    for edge in poshubs:
+        node1 = list(graph.nodes)[edge[0]]
+        node2 = list(graph.nodes)[edge[1]]
+        edge_vals[(node1, node2)] = 'Positive hub'
+    nx.set_edge_attributes(graph, edge_vals, 'Hub ID')
+
+
+def diffuse_graph(graph, difmat, diff_range):
+    """
+    Diffusion process for matrix generation.
+    The diffusion process iterates over the matrix;
+    this function represents one iteration step.
+    In that step, a random node N is selected from the graph.
+    Then a perturbation is propagated across the network.
+    The perturbation is multiplied by the weights of the associations between k neighbours and
+    then added to the matrix at position (N, Kth neighbour).
+    :param graph: NetworkX graph of a microbial assocation network.
+    :param difmat: Diffusion matrix.
+    :param diff_range: Diffusion range.
+    :return:
+    """
+    node = choice(list(graph.nodes))
+    # iterate over node neighbours across range
+    nbs = dict()
+    nbs[node] = 1.0
+    upper_diff = list()
+    upper_diff.append(nbs)
+    for i in range(diff_range):
+        # this loop specifies diffusion of weight value over the random node
+        new_upper = list()
+        for nbs in upper_diff:
+            for nb in nbs:
+                new_nbs = graph.neighbors(nb)
+                for new_nb in new_nbs:
+                    next_diff = dict()
+                    try:
+                        weight = graph.get_edge_data(nb, new_nb)['weight']
+                    except KeyError:
+                        sys.stdout.write('Edge did not have a weight attribute! Setting to 1.0')
+                        sys.stdout.flush()
+                        weight = 1.0
+                    next_diff[new_nb] = weight * nbs[nb]
+                    difmat[difmat[node], difmat[new_nb]] += weight * nbs[nb]
+                    difmat[difmat[new_nb], difmat[node]] += weight * nbs[
+                        nb]  # undirected so both sides have weight added
+                    new_upper.append(next_diff)
+        upper_diff = new_upper
+    return difmat
 
 if __name__ == '__main__':
     manca()
