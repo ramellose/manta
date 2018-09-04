@@ -66,10 +66,24 @@ def set_manca():
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
                         default=1000)
+    parser.add_argument('--central', dest='central', action='store_true',
+                        help='If True, centrality values are calculated for the network. ', required=False)
+    parser.set_defaults(central=False)
+    parser.add_argument('-p', '--percentage',
+                        dest='p',
+                        required=False,
+                        help='Percentage of central edges to return. ',
+                        default=10)
+    parser.add_argument('-boot', '--bootstrap',
+                        dest='boot',
+                        required=False,
+                        help='Number of bootstrap iterations for centrality estimates. ',
+                        default=100)
     return parser
 
+
 def manca():
-    args = set_manca().parse_args()
+    args = set_manca().parse_args(sys.argv[1:])
     try:
         if args['f'] == 'graphml':
             network = nx.read_graphml(args['graph'])
@@ -80,16 +94,16 @@ def manca():
         elif args['f'] == 'adj':
             network = nx.read_multiline_adjlist(args['graph'])
         else:
-            sys.stdout.write('Format not accepted.')
+            sys.stdout.write('Format not accepted.' + '\n')
             sys.stdout.flush()
             exit()
     except Exception:
-        sys.stdout.write('Could not import network file! ')
+        sys.stdout.write('Could not import network file! ' + '\n')
         sys.stdout.flush()
         exit()
-    clustered = cluster_graph(network, limit=args['limit'],
-                              diff_range=args['df'], max_clusters=args['mc'],
-                              iterations=args['iter'])
+    clustered = main(network, limit=args['limit'], diff_range=args['df'],
+                     max_clusters=args['mc'], iterations=args['iter'],
+             central=args['central'], percentage=args['p'], bootstraps=args['boot'])
     if args['f'] == 'graphml':
         nx.write_graphml(clustered, args['fp'])
     elif args['f'] == 'edgelist':
@@ -98,7 +112,7 @@ def manca():
         nx.write_gml(clustered, args['fp'])
     elif args['f'] == 'adj':
         nx.write_multiline_adjlist(clustered, args['fp'])
-    sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.')
+    sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
 
 
@@ -121,7 +135,7 @@ def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
     :param diff_range: Diffusion range of network perturbation.
     :param max_clusters: Number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
-    :return: Networkx graph with cluster ID as node property.
+    :return: NetworkX graph, number of iterations and diffusion matrix.
     """
     delay = 0  # after delay reaches the limit value, algorithm is considered converged
     adj = np.zeros((len(graph.nodes), len(graph.nodes)))  # this considers diffusion, I could also just use nx adj
@@ -136,7 +150,7 @@ def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
         # cluster number is defined through gap statistic
         # max cluster number to test is by default 5
         # define topscore and bestcluster for no cluster
-        adj = diffuse_graph(graph, adj, diff_range)
+        adj = diffuse_graph(graph, adj, diff_range, adj_index)
         topscore = 2
         bestcluster = None
         randomclust = np.random.randint(2, size=len(adj))
@@ -177,7 +191,7 @@ def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
                         if nb not in node_ids:
                             # only add 1 to sparsity if it is a positive edge
                             # otherwise subtract 1
-                            cut = graph.get_edge_data(node, nb)['weight']
+                            cut = graph[node][nb]['weight']
                             if cut > 0:
                                 sparsity += 1
                             else:
@@ -189,47 +203,67 @@ def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
                 delay += 1
             prev_sparsity = sparsity
             iters += 1
-    if iters == 1000:
-        sys.stdout.write('Warning: algorithm did not converge.')
+            sys.stdout.write('Current sparsity level: ' + str(prev_sparsity) + '\n')
+            sys.stdout.flush()
+            sys.stdout.write('Number of iterations: ' + str(iters) + '\n')
+            sys.stdout.flush()
+    if iters == iterations:
+        sys.stdout.write('Warning: algorithm did not converge.' + '\n')
         sys.stdout.flush()
     clusdict = dict()
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = bestcluster[i]
-    nx.set_node_attributes(graph, clusdict, 'Cluster')
-    return graph, iterations, adj
+    nx.set_node_attributes(graph, values=clusdict, name='cluster')
+    return graph, iters, adj
 
 
-def central_graph(matrix, graph, iterations, diff_range, percentage, test, bootstraps):
+def central_graph(matrix, graph, iterations, diff_range, percentage, bootstraps):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
 
-    If bootstrap is set to True, the hub species are bootstrapped.
-    The
+    If the bootstrap number is set to a value above 0, the centrality values are bootstrapped.
+
+    The fraction of positive edges and negative edges is based on the ratio between
+    positive and negative weights in the network.
+
+    Hence, a network with 90 positive weights and 10 negative weights will have 90% positive hubs returned.
 
     Parameters
     ----------
     :param matrix: Outcome of diffusion process from cluster_graph.
     :param graph: NetworkX graph of a microbial association network.
     :param iterations: The number of iterations carried out by the clustering algorithm.
-    :param percentage: Diffusion range of network perturbation.
-    :param test: If true, the matrix is compared to matrices generated from Klemm-Eguíluz matrices.
-    :param bootstraps: Number of bootstraps to carry out.
+    :param diff_range: Diffusion range of network perturbation.
+    :param percentage: Determines percentile of hub species to return.
+    :param bootstraps: Number of bootstraps to carry out. If 0, no bootstrapping is done.
     :return: Networkx graph with hub ID / p-value as node property.
     """
-    negthresh = np.percentile(matrix, percentage/2)
-    posthresh = np.percentile(matrix, 100-percentage/2)
+    weights = nx.get_edge_attributes(graph, 'weight')
+    # calculates the ratio of positive / negative weights
+    # note that ratios need to be adapted, because the matrix is symmetric
+    posnodes = sum(weights[x] > 0 for x in weights)
+    ratio = posnodes / len(weights)
+    negthresh = np.percentile(matrix, percentage*(1-ratio)/2)
+    posthresh = np.percentile(matrix, 100-percentage*ratio/2)
     neghubs = np.argwhere(matrix < negthresh)
     poshubs = np.argwhere(matrix > posthresh)
-
-    if test:
+    adj_index = dict()
+    for i in range(len(graph.nodes)):
+        adj_index[list(graph.nodes)[i]] = i
+    if bootstraps > 0:
         boots = list()
         for i in range(bootstraps):
             bootstrap = null_graph(graph)
             adj = np.zeros((len(graph.nodes), len(graph.nodes)))
+            boot_index = dict()
+            for k in range(len(graph.nodes)):
+                boot_index[list(graph.nodes)[k]] = k
             for j in range(iterations):
-                adj = diffuse_graph(bootstrap, adj, diff_range)
+                adj = diffuse_graph(bootstrap, adj, diff_range, boot_index)
             boots.append(adj)
+            sys.stdout.write('Bootstrap iteration ' + str(i) + '\n')
+            sys.stdout.flush()
         pvals = bootstrap_test(matrix, boots)
 
     # need to make sure graph is undirected
@@ -237,24 +271,22 @@ def central_graph(matrix, graph, iterations, diff_range, percentage, test, boots
     # initialize empty dictionary to store edge ID
     edge_vals = dict()
     edge_pvals = dict()
-    for edge in graph.edges:
-        edge_vals[edge] = 'None'
     # need to convert matrix index to node ID
     for edge in neghubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
-        edge_vals[(node1, node2)] = 'Negative hub'
-        edge_pvals[(node1, node2)] = pvals[node1, node2]
+        edge_vals[(node1, node2)] = 'negative hub'
+        edge_pvals[(node1, node2)] = pvals[adj_index[node1], adj_index[node2]]
     for edge in poshubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
-        edge_vals[(node1, node2)] = 'Positive hub'
-        edge_pvals[(node1, node2)] = pvals[node1, node2]
-    nx.set_edge_attributes(graph, edge_vals, 'Hub ID')
-    nx.set_edge_attributes(graph, edge_pvals, 'Hub p-value')
+        edge_vals[(node1, node2)] = 'positive hub'
+        edge_pvals[(node1, node2)] = pvals[adj_index[node1], adj_index[node2]]
+    nx.set_edge_attributes(graph, values=edge_vals, name='hub')
+    nx.set_edge_attributes(graph, values=edge_pvals, name='hub p-value')
 
 
-def diffuse_graph(graph, difmat, diff_range):
+def diffuse_graph(graph, difmat, diff_range, adj_index):
     """
     Diffusion process for matrix generation.
     The diffusion process iterates over the matrix;
@@ -266,6 +298,7 @@ def diffuse_graph(graph, difmat, diff_range):
     :param graph: NetworkX graph of a microbial assocation network.
     :param difmat: Diffusion matrix.
     :param diff_range: Diffusion range.
+    :param adj_index: Indices for diffusion matrix.
     :return:
     """
     node = choice(list(graph.nodes))
@@ -283,15 +316,15 @@ def diffuse_graph(graph, difmat, diff_range):
                 for new_nb in new_nbs:
                     next_diff = dict()
                     try:
-                        weight = graph.get_edge_data(nb, new_nb)['weight']
+                        weight = graph[nb][new_nb]['weight']
                     except KeyError:
-                        sys.stdout.write('Edge did not have a weight attribute! Setting to 1.0')
+                        sys.stdout.write('Edge did not have a weight attribute! Setting to 1.0' + '\n')
                         sys.stdout.flush()
                         weight = 1.0
                     next_diff[new_nb] = weight * nbs[nb]
-                    difmat[difmat[node], difmat[new_nb]] += weight * nbs[nb]
-                    difmat[difmat[new_nb], difmat[node]] += weight * nbs[
-                        nb]  # undirected so both sides have weight added
+                    difmat[adj_index[node], adj_index[new_nb]] += weight * nbs[nb]
+                    difmat[adj_index[new_nb], adj_index[node]] += weight * nbs[nb]
+                    # undirected so both sides have weight added
                     new_upper.append(next_diff)
         upper_diff = new_upper
     return difmat
@@ -304,12 +337,26 @@ def null_graph(graph):
     as well as connectedness.
     The number of rewirings is the square of the node amount.
     This ensures the network is completely randomized.
+    The weight of the edges also needs to be normalized.
+    Therefore, after the network is randomized, weight is sampled
+    from the original graph and added to the randomized graph.
+    Because this does not take negative / positive hubs into account,
+    the fraction of positive / negative weights per node
+    is not preserved.
     :param graph: Original graph.
     :return: NetworkX graph
     """
     model = deepcopy(graph)
     swaps = len(model.nodes) ** 2
     nx.algorithms.connected_double_edge_swap(model, nswap=swaps)
+    model = nx.to_undirected(model)
+    edge_weights = list()
+    for edge in graph.edges:
+        edge_weights.append(graph[edge[0]][edge[1]]['weight'])
+    random_weights = dict()
+    for edge in model.edges:
+        random_weights[edge] = choice(edge_weights)
+    nx.set_edge_attributes(model, random_weights, 'weight')
     return model
 
 def bootstrap_test(matrix, bootstraps):
@@ -344,7 +391,7 @@ def bootstrap_test(matrix, bootstraps):
 
 
 def main(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
-          central=True, percentage=10, test=True, bootstraps=100):
+          central=True, percentage=10, bootstraps=100):
     """
     Main function that carries out graph clusterning and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -353,15 +400,17 @@ def main(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
     :param max_clusters: Number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param central: If True, centrality values are calculated.
-    :param percentage: Percentage of hubs to return.
-    :param test: If True, centrality values are bootstrapped.
+    :param percentage: Determines percentile thresholds.
     :param bootstraps: Number of bootstrap iterations.
     :return:
     """
-    graph, numbers, matrix = cluster_graph(graph, limit, diff_range, max_clusters, iterations)
+    results = cluster_graph(graph, limit, diff_range, max_clusters, iterations)
+    graph = results[0]
+    numbers = results[1]
+    matrix = results[2]
     if central:
         central_graph(matrix, graph, numbers, diff_range,
-                      percentage, test, bootstraps)
+                      percentage, bootstraps)
     return graph
 
 if __name__ == '__main__':
