@@ -21,15 +21,18 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import argparse
 from copy import deepcopy
-from math import sqrt
 from scipy import stats
+import json
 
 def set_manca():
     """This parser gets input settings for running the manca clustering algorithm.
     Apart from the parameters specified by cluster_graph,
     it requires an input format that can be read by networkx."""
     parser = argparse.ArgumentParser(
-        description='Run the microbial association network clustering algorithm.')
+        description='Run the microbial association network clustering algorithm.'
+                    'If --central is added, centrality is calculated. '
+                    'Exporting as .cyjs allows for import into Cytoscape with '
+                    'a phylogenetically-informed layout (to be developed).')
     parser.add_argument('-i', '--input_graph',
                         dest='graph',
                         help='Input network file.',
@@ -40,10 +43,10 @@ def set_manca():
                         default=None, required=True)
     parser.add_argument('-f', '--file_type',
                         dest='f',
-                        help='Format of network file.',
+                        help='Format of output network file. Default is set to cyjs.',
                         choices=['gml', 'edgelist',
-                                 'graphml', 'adj'],
-                        default='graphml')
+                                 'graphml', 'adj', 'cyjs'],
+                        default='cyjs')
     parser.add_argument('-limit', '--convergence_limit',
                         dest='limit',
                         required=False,
@@ -67,8 +70,12 @@ def set_manca():
                         help='Number of iterations to repeat if convergence is not reached. ',
                         default=1000)
     parser.add_argument('--central', dest='central', action='store_true',
-                        help='If True, centrality values are calculated for the network. ', required=False)
+                        help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
+    parser.add_argument('--layout', dest='layout', action='store_true',
+                        help='With this flag, layout coordinates are calculated for the network. '
+                             'This feature is not yet available. ', required=False),
+    parser.set_defaults(layout=False)
     parser.add_argument('-p', '--percentage',
                         dest='p',
                         required=False,
@@ -82,17 +89,22 @@ def set_manca():
     return parser
 
 
-def manca():
+def main():
     args = set_manca().parse_args(sys.argv[1:])
+    args = vars(args)
+    filename = args['graph'].split(sep=".")
+    extension = filename[len(filename)-1]
     try:
-        if args['f'] == 'graphml':
+        if extension == 'graphml':
             network = nx.read_graphml(args['graph'])
-        elif args['f'] == 'edgelist':
+        elif extension == 'edgelist':
             network = nx.read_weighted_edgelist(args['graph'])
-        elif args['f'] == 'gml':
+        elif extension == 'gml':
             network = nx.read_gml(args['graph'])
-        elif args['f'] == 'adj':
+        elif extension == 'adj':
             network = nx.read_multiline_adjlist(args['graph'])
+        elif extension == 'cyjs':
+            network = read_cytojson(args['graph'])
         else:
             sys.stdout.write('Format not accepted.' + '\n')
             sys.stdout.flush()
@@ -101,9 +113,14 @@ def manca():
         sys.stdout.write('Could not import network file! ' + '\n')
         sys.stdout.flush()
         exit()
-    clustered = main(network, limit=args['limit'], diff_range=args['df'],
-                     max_clusters=args['mc'], iterations=args['iter'],
-             central=args['central'], percentage=args['p'], bootstraps=args['boot'])
+    # first need to convert network to undirected
+    network = nx.to_undirected(network)
+    clustered = manca(network, limit=args['limit'], diff_range=args['df'],
+                      max_clusters=args['mc'], iterations=args['iter'],
+                      central=args['central'], percentage=args['p'], bootstraps=args['boot'])
+    layout = None
+    if args['layout']:
+        pass
     if args['f'] == 'graphml':
         nx.write_graphml(clustered, args['fp'])
     elif args['f'] == 'edgelist':
@@ -112,6 +129,8 @@ def manca():
         nx.write_gml(clustered, args['fp'])
     elif args['f'] == 'adj':
         nx.write_multiline_adjlist(clustered, args['fp'])
+    elif args['f'] == 'cyjs':
+        write_cytojson(graph=clustered, filename=args['fp'], layout=layout)
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
 
@@ -151,7 +170,6 @@ def cluster_graph(graph, limit, diff_range, max_clusters, iterations):
         # max cluster number to test is by default 5
         # define topscore and bestcluster for no cluster
         adj = diffuse_graph(graph, adj, diff_range, adj_index)
-        topscore = 2
         bestcluster = None
         randomclust = np.random.randint(2, size=len(adj))
         try:
@@ -368,7 +386,6 @@ def bootstrap_test(matrix, bootstraps):
     Each score is considered an individual statistic in this case.
     :param matrix: Matrix generated with diffuse_graph
     :param bootstraps: Bootstrapped diffuse_graph matrices
-    :param index: Index of node of interest
     :return: Matrix of p-values
     """
     mean_straps = np.mean(np.array(bootstraps), axis=0)
@@ -390,7 +407,7 @@ def bootstrap_test(matrix, bootstraps):
     return pvals
 
 
-def main(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
+def manca(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
           central=True, percentage=10, bootstraps=100):
     """
     Main function that carries out graph clusterning and calculates centralities.
@@ -413,5 +430,167 @@ def main(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
                       percentage, bootstraps)
     return graph
 
+
+def read_cytojson(filename):
+    """Small utility function for reading Cytoscape json files
+    generated with CoNet.
+
+    :param filename: Filepath to location of cyjs file.
+    :return: NetworkX graph.
+
+    Adapted from the NetworkX cytoscape_graph function.
+
+    License
+    =======
+
+    NetworkX is distributed with the 3-clause BSD license.
+
+    ::
+
+       Copyright (C) 2004-2018, NetworkX Developers
+       Aric Hagberg <hagberg@lanl.gov>
+       Dan Schult <dschult@colgate.edu>
+       Pieter Swart <swart@lanl.gov>
+       All rights reserved.
+
+       Redistribution and use in source and binary forms, with or without
+       modification, are permitted provided that the following conditions are
+       met:
+
+         * Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+
+         * Redistributions in binary form must reproduce the above
+           copyright notice, this list of conditions and the following
+           disclaimer in the documentation and/or other materials provided
+           with the distribution.
+
+         * Neither the name of the NetworkX Developers nor the names of its
+           contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+       THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+       "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+       LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+       A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+       OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+       SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+       LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+       DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+       THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    """
+    with open(filename) as f:
+        data = json.load(f)
+    name = 'name'
+    ident = 'id'
+    if len(set([ident, name])) < 2:
+        raise nx.NetworkXError('Attribute names are not unique.')
+    graph = nx.Graph()
+    graph.graph = dict(data.get('data'))
+    i = 0
+    for d in data["elements"]["nodes"]:
+        # only modification: 'value' key is not included in CoNet output
+        # now graph only needs ID and name values
+        node_data = d["data"].copy()
+        try:
+            node = d["data"].get(ident)
+        except KeyError:
+            # if no index is found, one is generated
+            node = i
+            i += 1
+        if d["data"].get(name):
+            node_data[name] = d["data"].get(name)
+        graph.add_node(node)
+        graph.nodes[node].update(node_data)
+    for d in data["elements"]["edges"]:
+        edge_data = d["data"].copy()
+        sour = d["data"].pop("source")
+        targ = d["data"].pop("target")
+        graph.add_edge(sour, targ)
+        graph.edges[sour, targ].update(edge_data)
+    return graph
+
+def write_cytojson(filename, graph, layout=None):
+    """Small utility function for writing Cytoscape json files.
+    Also accepts a layout dictionary to add to the file.
+
+    :param filename: Filepath to location of cyjs file.
+    :param graph: NetworkX graph to write to disk.
+    :param layout: Dictionary of layout coordinates that is written to cyjs file.
+    :return:
+
+    Adapted from the NetworkX cytoscape_graph function.
+
+    License
+    =======
+
+    NetworkX is distributed with the 3-clause BSD license.
+
+    ::
+
+       Copyright (C) 2004-2018, NetworkX Developers
+       Aric Hagberg <hagberg@lanl.gov>
+       Dan Schult <dschult@colgate.edu>
+       Pieter Swart <swart@lanl.gov>
+       All rights reserved.
+
+       Redistribution and use in source and binary forms, with or without
+       modification, are permitted provided that the following conditions are
+       met:
+
+         * Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+
+         * Redistributions in binary form must reproduce the above
+           copyright notice, this list of conditions and the following
+           disclaimer in the documentation and/or other materials provided
+           with the distribution.
+
+         * Neither the name of the NetworkX Developers nor the names of its
+           contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+       THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+       "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+       LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+       A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+       OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+       SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+       LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+       DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+       THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    """
+    name = 'name'
+    ident = 'id'
+
+    jsondata = {"data": list(graph.graph.items())}
+    jsondata["elements"] = {"nodes": [], "edges": []}
+    nodes = jsondata["elements"]["nodes"]
+    edges = jsondata["elements"]["edges"]
+
+    for i, j in graph.nodes.items():
+        n = {"data": j.copy()}
+        n["data"]["id"] = j.get(ident) or str(i)
+        n["data"]["value"] = i
+        n["data"]["name"] = j.get(name) or str(i)
+        if layout:
+            n["position"]["x"] = layout["id"]["x"]
+            n["position"]["y"] = layout["id"]["y"]
+        nodes.append(n)
+
+    for e in graph.edges():
+        n = {"data": graph.adj[e[0]][e[1]].copy()}
+        n["data"]["source"] = e[0]
+        n["data"]["target"] = e[1]
+        edges.append(n)
+
+    with open(filename, 'w') as outfile:
+        json.dump(jsondata, outfile)
+
+
 if __name__ == '__main__':
-    manca()
+    main()
