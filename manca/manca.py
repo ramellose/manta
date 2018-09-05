@@ -23,6 +23,9 @@ import argparse
 from copy import deepcopy
 from scipy import stats
 import json
+from math import cos, sin, radians
+import csv
+
 
 def set_manca():
     """This parser gets input settings for running the manca clustering algorithm.
@@ -32,7 +35,7 @@ def set_manca():
         description='Run the microbial association network clustering algorithm.'
                     'If --central is added, centrality is calculated. '
                     'Exporting as .cyjs allows for import into Cytoscape with '
-                    'a phylogenetically-informed layout (to be developed).')
+                    'a cluster- and phylogeny-informed layout.')
     parser.add_argument('-i', '--input_graph',
                         dest='graph',
                         help='Input network file.',
@@ -73,8 +76,12 @@ def set_manca():
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
     parser.add_argument('--layout', dest='layout', action='store_true',
-                        help='With this flag, layout coordinates are calculated for the network. '
-                             'This feature is not yet available. ', required=False),
+                        help='With this flag, layout coordinates are calculated for the network. ', required=False),
+    parser.add_argument('-tax', '--taxonomy_table',
+                        dest='tax',
+                        help='Filepath to tab-delimited table. '
+                             'This table is used to calculate edge weights during layout calculation.',
+                        default=None)
     parser.set_defaults(layout=False)
     parser.add_argument('-p', '--percentage',
                         dest='p',
@@ -120,7 +127,7 @@ def main():
                       central=args['central'], percentage=args['p'], bootstraps=args['boot'])
     layout = None
     if args['layout']:
-        pass
+        layout = generate_layout(clustered, args['tax'])
     if args['f'] == 'graphml':
         nx.write_graphml(clustered, args['fp'])
     elif args['f'] == 'edgelist':
@@ -377,6 +384,7 @@ def null_graph(graph):
     nx.set_edge_attributes(model, random_weights, 'weight')
     return model
 
+
 def bootstrap_test(matrix, bootstraps):
     """
     Returns the p-values of the bootstrap procedure.
@@ -410,7 +418,7 @@ def bootstrap_test(matrix, bootstraps):
 def manca(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
           central=True, percentage=10, bootstraps=100):
     """
-    Main function that carries out graph clusterning and calculates centralities.
+    Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
     :param limit: Number of iterations to run until alg considers sparsity value converged.
     :param diff_range: Diffusion range of network perturbation.
@@ -429,6 +437,99 @@ def manca(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
         central_graph(matrix, graph, numbers, diff_range,
                       percentage, bootstraps)
     return graph
+
+
+def generate_layout(graph, tax=None):
+    """
+    Generates a dictionary of layout coordinates.
+    The layout is based on the Fruchterman-Reingold force-directed algorithm,
+    where a layout is calculated for each of the clusters specified
+    in the supplied NetworkX graph. These layouts are then shifted and combined
+    into a full layout.
+    :param graph: NetworkX graph with cluster IDs
+    :param tax: Filepath to tab-delimited taxonomy table.
+    :return: dictionary of layout coordinates
+    """
+    try:
+        clusters = nx.get_node_attributes(graph, 'cluster')
+    except KeyError:
+        sys.stdout.write('Graph does not appear to have a cluster attribute. ' + '\n')
+        sys.stdout.flush()
+    total = list()
+    [total.append(clusters[x]) for x in clusters]
+    num_clusters = list(set(total))
+    coord_list = list()
+    for i in range(len(num_clusters)):
+        cluster = num_clusters[i]
+        node_list = list()
+        for node in clusters:
+            if clusters[node] == cluster:
+                node_list.append(node)
+        clustgraph = graph.subgraph(node_list)
+        if tax:
+            with open(tax, 'r') as taxdata:
+                clustgraph = generate_tax_weights(clustgraph, taxdata)
+            subcoords = nx.spring_layout(clustgraph, weight='tax_score')
+        else:
+            subcoords = nx.spring_layout(clustgraph, weight=None)
+        # currently, weight attribute is set to None
+        # phylogenetic similarity would be nice though
+        for node in subcoords:
+            # need to scale coordinate system and transpose
+            # spring_layout coordinates are placed in box of size[0,1]
+            # transpose them vertically to box of size[0, 1*number of clusters]
+            subcoords[node][1] += len(num_clusters)
+        coord_list.append(subcoords)
+    angles = 360 / len(num_clusters)
+    spins = 0
+    # each cluster is rotated around coordinates [0,0]
+    new_coords = dict()
+    while spins < 361:
+        for subcoords in coord_list:
+            spins += angles
+            for coord in subcoords:
+                new_x = cos(radians(spins)) * subcoords[coord][0] - sin(radians(spins)) * subcoords[coord][1]
+                new_y = sin(radians(spins)) * subcoords[coord][0] + cos(radians(spins)) * subcoords[coord][1]
+                new_coords[coord] = [new_x, new_y]
+    return new_coords
+
+
+def generate_tax_weights(graph, tax):
+    """
+    Returns supplied graph with taxonomic similarity as edge properties.
+    This taxonomic similarity is determined by
+    similarity at different taxonomic levels.
+    The more similar nodes are, the lower this similarity score is;
+    hence, force-directed layouts will place such nodes closer together.
+    Assumes that species assignments of NA or None are not relevant.
+    :param graph: NetworkX graph
+    :param tax: Taxonomy table
+    :return:
+    """
+    taxdict = dict()
+    tax_levels = ['Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species']
+    for item in tax_levels:
+        taxdict[item] = dict()
+    taxdata = csv.reader(tax, delimiter='\t')
+    header = next(taxdata)
+    for row in taxdata:
+        for i in range(1,len(row)):
+            if row[i] != 'NA' or 'None':
+                taxdict[tax_levels[i-1]][row[0]] = row[i]
+    tax_weights = dict()
+    for edge in graph.edges:
+        equal = True
+        score = 7
+        # maximum score 7 means all taxonomic levels are equal
+        # attractive force in spring layout algorithm is then largest
+        for i in range(7):
+            try:
+                if taxdict[tax_levels[7-i]][edge[0]] != taxdict[tax_levels[7-i]][edge[1]]:
+                    score -= 1
+            except IndexError:
+                pass
+        tax_weights[edge] = score
+    nx.set_edge_attributes(graph, tax_weights, 'tax_score')
 
 
 def read_cytojson(filename):
@@ -512,6 +613,7 @@ def read_cytojson(filename):
         graph.edges[sour, targ].update(edge_data)
     return graph
 
+
 def write_cytojson(filename, graph, layout=None):
     """Small utility function for writing Cytoscape json files.
     Also accepts a layout dictionary to add to the file.
@@ -578,8 +680,8 @@ def write_cytojson(filename, graph, layout=None):
         n["data"]["value"] = i
         n["data"]["name"] = j.get(name) or str(i)
         if layout:
-            n["position"]["x"] = layout["id"]["x"]
-            n["position"]["y"] = layout["id"]["y"]
+            n["position"]["x"] = layout["id"][0]
+            n["position"]["y"] = layout["id"][1]
         nodes.append(n)
 
     for e in graph.edges():
