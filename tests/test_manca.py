@@ -10,9 +10,11 @@ __license__ = 'Apache 2.0'
 
 import unittest
 import networkx as nx
-from manca.manca import cluster_graph, main, central_graph, null_graph, diffuse_graph, bootstrap_test, set_manca
+from manca.manca import cluster_graph, main, central_graph, \
+    null_graph, diffuse_graph, bootstrap_test, generate_tax_weights, generate_layout, manca
 from copy import deepcopy
 import numpy as np
+from io import StringIO
 
 g = nx.Graph()
 nodes = ["OTU_1", "OTU_2", "OTU_3", "OTU_4", "OTU_5",
@@ -43,10 +45,23 @@ g = g.to_undirected()
 limit = 100
 diff_range = 3
 max_clusters = 5
-iterations = 1000
+iterations = 100
 central = True
 percentage = 10
 bootstraps = 100
+
+tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
+OTU_1	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Synechococcus	NA
+OTU_2	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Planktomarina	NA
+OTU_3	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Synechococcus	NA
+OTU_4	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Oceanibulbus	NA
+OTU_5	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Ascidiaceihabitans	NA
+OTU_6	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Leisingera	NA
+OTU_7	Bacteria	Proteobacteria	Alphaproteobacteria	Sphingomonadales	Sphingomonadaceae	Erythrobacter	flavus
+OTU_8	Bacteria	Proteobacteria	Alphaproteobacteria	Sphingomonadales	Sphingomonadaceae	Erythrobacter	citreus
+OTU_9	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Cyanobium	NA
+OTU_10	Bacteria	Proteobacteria	Alphaproteobacteria	Rhizobiales	Rhizobiaceae	Mesorhizobium	NA
+""")
 
 
 class TestMain(unittest.TestCase):
@@ -58,7 +73,7 @@ class TestMain(unittest.TestCase):
         """
         Checks whether the main function carries out both clustering and centrality estimates.
         """
-        clustered_graph = main(deepcopy(g))
+        clustered_graph = manca(deepcopy(g))
         clusters = nx.get_node_attributes(clustered_graph, 'cluster')
         hubs = nx.get_edge_attributes(clustered_graph, 'hub')
 
@@ -117,6 +132,18 @@ class TestMain(unittest.TestCase):
             boots.append(adj)
         bootmats = bootstrap_test(results[2], boots)
         self.assertEqual(results[2].shape, bootmats.shape)
+
+    def test_tax_weights(self):
+        """Checks whether the tax weights for the edges are correctly calculated."""
+        tax_graph = deepcopy(g)
+        tax_graph = generate_tax_weights(tax_graph, tax)
+        self.assertEqual(tax_graph['OTU_1']['OTU_2']['tax_score'], 6)
+
+    def test_layout(self):
+        """Checks whether the layout function returns a dictionary of coordinates."""
+        clustered_graph = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
+        coords = generate_layout(clustered_graph)
+        self.assertEqual(type(coords), 'dict')
 
 
 if __name__ == '__main__':

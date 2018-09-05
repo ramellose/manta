@@ -15,16 +15,12 @@ This software is still in early alpha. Any feedback or bug reports will be much 
 
 ## Authors
 
-* **Lisa Röttjers** - [ramellose](https://github.com/ramellos)
+* **Lisa Röttjers** - [ramellose](https://github.com/ramellose)
 
-See also the list of [contributors](https://github.com/ramellose/massoc/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/ramellose/manca/contributors) who participated in this project.
 
 ## License
 
 This project is licensed under the Apache License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-massoc is largely built on and inspired by the [BIOM format](http://biom-format.org/).
 
 
