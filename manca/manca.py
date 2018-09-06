@@ -79,7 +79,7 @@ def set_manca():
                         help='With this flag, layout coordinates are calculated for the network. ', required=False),
     parser.add_argument('-tax', '--taxonomy_table',
                         dest='tax',
-                        help='Filepath to tab-delimited table. '
+                        help='Filepath to tab-delimited taxonomy table. '
                              'This table is used to calculate edge weights during layout calculation.',
                         default=None)
     parser.set_defaults(layout=False)
@@ -471,6 +471,7 @@ def generate_layout(graph, tax=None):
                 clustgraph = generate_tax_weights(clustgraph, taxdata)
             subcoords = nx.spring_layout(clustgraph, weight='tax_score')
         else:
+            clustgraph = generate_tax_weights(clustgraph, tax=None)
             subcoords = nx.spring_layout(clustgraph, weight=None)
         # currently, weight attribute is set to None
         # phylogenetic similarity would be nice though
@@ -496,39 +497,57 @@ def generate_layout(graph, tax=None):
 
 def generate_tax_weights(graph, tax):
     """
-    Returns supplied graph with taxonomic similarity as edge properties.
-    This taxonomic similarity is determined by
-    similarity at different taxonomic levels.
-    The more similar nodes are, the lower this similarity score is;
+    Returns supplied graph with node similarity as node properties.
+    This node similarity is determined by
+    similarity at different taxonomic levels and by structural similarity.
+    The more similar nodes are, the larger their similarity score is;
     hence, force-directed layouts will place such nodes closer together.
     Assumes that species assignments of NA or None are not relevant.
     :param graph: NetworkX graph
     :param tax: Taxonomy table
     :return:
     """
-    taxdict = dict()
-    tax_levels = ['Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species']
-    for item in tax_levels:
-        taxdict[item] = dict()
-    taxdata = csv.reader(tax, delimiter='\t')
-    header = next(taxdata)
-    for row in taxdata:
-        for i in range(1,len(row)):
-            if row[i] != 'NA' or 'None':
-                taxdict[tax_levels[i-1]][row[0]] = row[i]
-    tax_weights = dict()
-    for edge in graph.edges:
-        equal = True
-        score = 7
-        # maximum score 7 means all taxonomic levels are equal
-        # attractive force in spring layout algorithm is then largest
-        for i in range(7):
-            try:
-                if taxdict[tax_levels[7-i]][edge[0]] != taxdict[tax_levels[7-i]][edge[1]]:
-                    score -= 1
-            except IndexError:
-                pass
-        tax_weights[edge] = score
+    if tax:
+        taxdict = dict()
+        tax_levels = ['Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species']
+        for item in tax_levels:
+            taxdict[item] = dict()
+        taxdata = csv.reader(tax, delimiter='\t')
+        header = next(taxdata)
+        for row in taxdata:
+            for i in range(1,len(row)):
+                if row[i] != 'NA' or 'None':
+                    taxdict[tax_levels[i-1]][row[0]] = row[i]
+        tax_weights = dict()
+        for edge in graph.edges:
+            equal = True
+            score = 7
+            # maximum score 7 means all taxonomic levels are equal
+            # attractive force in spring layout algorithm is then largest
+            for i in range(7):
+                try:
+                    if taxdict[tax_levels[7-i]][edge[0]] != taxdict[tax_levels[7-i]][edge[1]]:
+                        score -= 1
+                except IndexError:
+                    pass
+            # can also correct for interaction similarity
+            # structural equivalence: if nodes share many neighbours, they are similar
+            # even if taxonomic similarity is low, similar interaction patterns -> high score
+            # using Jaccard coefficient
+            tax_weights[edge] = score
+    else:
+        tax_weights = dict()
+        for edge in graph.edges:
+            tax_weights[edge] = 1
+    jaccard = nx.jaccard_coefficient(graph, list(tax_weights.keys()))
+    for u, v, p in jaccard:
+        edge = (u, v)
+        if p > 0:
+            # average taxonomic similarity will easily be 2 or 3
+            # high neighbour similarity should be more important
+            # 14 is chosen as an arbitrary scaling factor
+            p_scaled = p * 14
+            tax_weights[edge] = tax_weights[edge] + p_scaled
     nx.set_edge_attributes(graph, tax_weights, 'tax_score')
 
 

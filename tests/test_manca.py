@@ -24,7 +24,8 @@ g.add_edges_from([("OTU_1", "OTU_2"), ("OTU_1", "OTU_3"),
                   ("OTU_2", "OTU_5"), ("OTU_3", "OTU_4"),
                   ("OTU_4", "OTU_8"), ("OTU_5", "OTU_7"),
                   ("OTU_10", "OTU_1"), ("OTU_7", "OTU_8"),
-                  ("OTU_10", "OTU_9"), ("OTU_9", "OTU_6")])
+                  ("OTU_10", "OTU_9"), ("OTU_9", "OTU_6"),
+                  ("OTU_3", "OTU_8")])
 
 weights = dict()
 weights[("OTU_1", "OTU_2")] = float(1.0)
@@ -37,6 +38,8 @@ weights[("OTU_10", "OTU_1")] = float(-1.0)
 weights[("OTU_7", "OTU_8")] = float(1.0)
 weights[("OTU_10", "OTU_9")] = float(1.0)
 weights[("OTU_9", "OTU_6")] = float(1.0)
+weights[("OTU_3", "OTU_8")] = float(1.0)
+
 
 nx.set_edge_attributes(g, values=weights, name='weight')
 
@@ -137,7 +140,7 @@ class TestMain(unittest.TestCase):
         """Checks whether the tax weights for the edges are correctly calculated."""
         tax_graph = deepcopy(g)
         tax_graph = generate_tax_weights(tax_graph, tax)
-        self.assertEqual(tax_graph['OTU_1']['OTU_2']['tax_score'], 6)
+        self.assertEqual(tax_graph['OTU_1']['OTU_2']['tax_score'], 2)
 
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
