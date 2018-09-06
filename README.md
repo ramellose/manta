@@ -5,14 +5,13 @@ Microbial association network clustering algorithm. Version 0.1.0.
 This toolbox is aimed at weighted & undirected microbial networks. It uses a diffusion-based proccess to carry out network clustering & centrality calculations.
 Moreover, it can generate a Cytoscape-compatible layout that places taxonomically similar & structurally similar nodes closer together.
 Contact the author at lisa.rottjers (at) kuleuven.be. Your feedback is much appreciated!
-This version is still in early alpha.
+This version is still in early alpha and has been tested for Python 3.6.
 
 ## Getting Started
 
 To install <i>manca</i>, run:
 ```
-git clone https://github.com/ramellose/manca.git
-sudo python manca/setup.py install
+pip install git+https://github.com/ramellose/manca.git
 ```
 
 To run the script, only two arguments are required:
