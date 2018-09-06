@@ -9,9 +9,10 @@ This version is still in early alpha.
 
 ## Getting Started
 
-To install <i>manca</i>, download and extract the repository. Then run:
+To install <i>manca</i>, run:
 ```
-python -m pip install -e location_to_download
+git clone https://github.com/ramellose/manca.git
+sudo python manca/setup.py install
 ```
 
 To run the script, only two arguments are required:
