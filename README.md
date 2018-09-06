@@ -14,7 +14,7 @@ To install <i>manca</i>, download and extract the repository. Then run:
 python -m pip install -e location_to_download
 ```
 
-To run the script, only two arguments are required: 
+To run the script, only two arguments are required:
 ```
 manca -i filepath_to_input_network -o filepath_to_output_network
 ```

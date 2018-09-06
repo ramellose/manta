@@ -10,8 +10,10 @@ __license__ = 'Apache 2.0'
 
 import unittest
 import networkx as nx
-from manca.manca import cluster_graph, main, central_graph, \
-    null_graph, diffuse_graph, bootstrap_test, generate_tax_weights, generate_layout, manca
+from manca.manca import manca
+from manca.cluster_sparse import central_graph, cluster_graph, diffuse_graph
+from manca.bootstrap_centrality import null_graph, bootstrap_graph
+from manca.layout_graph import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
 from io import StringIO
@@ -48,7 +50,7 @@ g = g.to_undirected()
 limit = 100
 diff_range = 3
 max_clusters = 5
-iterations = 100
+iterations = 1000
 central = True
 percentage = 10
 bootstraps = 100
@@ -108,7 +110,7 @@ class TestMain(unittest.TestCase):
         for i in range(len(g.nodes)):
             adj_index[list(g.nodes)[i]] = i
         new_adj = diffuse_graph(g, adj, diff_range, adj_index)
-        self.assertGreater(np.mean(new_adj), 0)
+        self.assertNotEqual(np.mean(new_adj), 0)
 
     def test_null_graph_equal(self):
         """Checks if a permuted graph with identical number of edges is generated. """
@@ -123,17 +125,16 @@ class TestMain(unittest.TestCase):
     def test_bootstrap(self):
         """Checks if p-values for the graph are returned. """
         results = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
-        boots = list()
-        for i in range(100):
-            bootstrap = null_graph(g)
-            adj = np.zeros((len(g.nodes), len(g.nodes)))
-            boot_index = dict()
-            for k in range(len(g.nodes)):
-                boot_index[list(g.nodes)[k]] = k
-            for j in range(iterations):
-                adj = diffuse_graph(bootstrap, adj, diff_range, boot_index)
-            boots.append(adj)
-        bootmats = bootstrap_test(results[2], boots)
+        weights = nx.get_edge_attributes(results[0], 'weight')
+        # calculates the ratio of positive / negative weights
+        # note that ratios need to be adapted, because the matrix is symmetric
+        posnodes = sum(weights[x] > 0 for x in weights)
+        ratio = posnodes / len(weights)
+        negthresh = np.percentile(results[2], percentage * (1 - ratio) / 2)
+        posthresh = np.percentile(results[2], 100 - percentage * ratio / 2)
+        neghubs = np.argwhere(results[2] < negthresh)
+        poshubs = np.argwhere(results[2] > posthresh)
+        bootmats = bootstrap_graph(results[0], results[2], iterations, diff_range, bootstraps, posthresh, negthresh)
         self.assertEqual(results[2].shape, bootmats.shape)
 
     def test_tax_weights(self):
@@ -145,8 +146,8 @@ class TestMain(unittest.TestCase):
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
         clustered_graph = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
-        coords = generate_layout(clustered_graph)
-        self.assertEqual(type(coords), 'dict')
+        coords = generate_layout(clustered_graph[0])
+        self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 
 
 if __name__ == '__main__':
