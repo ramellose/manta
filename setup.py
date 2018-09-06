@@ -2,7 +2,8 @@ from setuptools import setup
 
 setup(name='manca',
       version='0.1.0',
-      packages=['manca'],
+      packages=['manca', 'manca.bootstrap_centrality',
+                'manca.cluster_sparse', 'manca.cyjson_utils', 'manca.layout_graph'],
       description='Microbial association network clustering',
       author='Lisa Röttjers',
       author_email='lisa.rottjers@kuleuven.be',
