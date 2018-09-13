@@ -34,7 +34,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import sys
-from manca.bootstrap_centrality import bootstrap_graph, diffuse_graph
+from manca.boots import bootstrap_graph, diffuse_graph
 
 
 def cluster_graph(graph, limit, diff_range, max_clusters, iterations):

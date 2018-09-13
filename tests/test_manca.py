@@ -11,9 +11,9 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manca.manca import manca
-from manca.cluster_sparse import central_graph, cluster_graph, diffuse_graph
-from manca.bootstrap_centrality import null_graph, bootstrap_graph
-from manca.layout_graph import generate_layout, generate_tax_weights
+from manca.cluster import central_graph, cluster_graph, diffuse_graph
+from manca.boots import null_graph, bootstrap_graph
+from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
 from io import StringIO

@@ -19,7 +19,7 @@ import networkx as nx
 import json
 
 
-def read_cytojson(filename):
+def read_cyjson(filename):
     """Small utility function for reading Cytoscape json files
     generated with CoNet.
 
@@ -101,7 +101,7 @@ def read_cytojson(filename):
     return graph
 
 
-def write_cytojson(filename, graph, layout=None):
+def write_cyjson(filename, graph, layout=None):
     """Small utility function for writing Cytoscape json files.
     Also accepts a layout dictionary to add to the file.
 

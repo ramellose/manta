@@ -16,9 +16,9 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import sys
 import argparse
-from manca.cluster_sparse import cluster_graph, central_graph
-from manca.cyjson_utils import write_cytojson, read_cytojson
-from manca.layout_graph import generate_layout
+from manca.cluster import cluster_graph, central_graph
+from manca.cyjson import write_cyjson, read_cyjson
+from manca.layout import generate_layout
 
 
 def set_manca():
@@ -105,7 +105,7 @@ def main():
         elif extension == 'adj':
             network = nx.read_multiline_adjlist(args['graph'])
         elif extension == 'cyjs':
-            network = read_cytojson(args['graph'])
+            network = read_cyjson(args['graph'])
         else:
             sys.stdout.write('Format not accepted.' + '\n')
             sys.stdout.flush()
@@ -116,7 +116,7 @@ def main():
         exit()
     # first need to convert network to undirected
     network = nx.to_undirected(network)
-    clustered = manca(network, limit=args['limit'], diff_range=args['df'],
+    clustered = clus_central(network, limit=args['limit'], diff_range=args['df'],
                       max_clusters=args['mc'], iterations=args['iter'],
                       central=args['central'], percentage=args['p'], bootstraps=args['boot'])
     layout = None
@@ -131,12 +131,12 @@ def main():
     elif args['f'] == 'adj':
         nx.write_multiline_adjlist(clustered, args['fp'])
     elif args['f'] == 'cyjs':
-        write_cytojson(graph=clustered, filename=args['fp'], layout=layout)
+        write_cyjson(graph=clustered, filename=args['fp'], layout=layout)
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
 
 
-def manca(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
+def clus_central(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
           central=True, percentage=10, bootstraps=100):
     """
     Main function that carries out graph clustering and calculates centralities.
