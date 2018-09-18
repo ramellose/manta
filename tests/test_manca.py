@@ -10,9 +10,9 @@ __license__ = 'Apache 2.0'
 
 import unittest
 import networkx as nx
-from manca.manca import manca
+from manca.manca import clus_central
 from manca.cluster import central_graph, cluster_graph, diffuse_graph
-from manca.boots import null_graph, bootstrap_graph
+from manca.perms import null_graph, perm_graph
 from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
@@ -47,13 +47,12 @@ nx.set_edge_attributes(g, values=weights, name='weight')
 
 g = g.to_undirected()
 
-limit = 100
-diff_range = 3
+limit = 0.000001
 max_clusters = 5
-iterations = 1000
+iterations = 10000
 central = True
 percentage = 10
-bootstraps = 100
+permutations = 100
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
 OTU_1	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Synechococcus	NA
@@ -78,7 +77,7 @@ class TestMain(unittest.TestCase):
         """
         Checks whether the main function carries out both clustering and centrality estimates.
         """
-        clustered_graph = manca(deepcopy(g))
+        clustered_graph = clus_central(deepcopy(g))
         clusters = nx.get_node_attributes(clustered_graph, 'cluster')
         hubs = nx.get_edge_attributes(clustered_graph, 'hub')
 
@@ -89,27 +88,22 @@ class TestMain(unittest.TestCase):
         WARNING: at the moment the test indicates that centrality measures
         are not stable.
         """
-        results = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
         graph = results[0]
-        numbers = results[1]
-        matrix = results[2]
-        central_graph(matrix, graph, numbers, diff_range, percentage, bootstraps)
+        matrix = results[1]
+        central_graph(matrix, graph, percentage, permutations, iterations)
         hubs = nx.get_edge_attributes(graph, 'hub')
-        self.assertEqual(hubs[list(hubs.keys())[0]], 'positive hub')
+        self.assertEqual(hubs[list(hubs.keys())[0]], 'negative hub')
 
     def test_cluster_manca(self):
         """Checks whether the correct cluster IDs are assigned. """
-        clustered_graph = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """
-        adj = np.zeros((len(g.nodes), len(g.nodes)))  # this considers diffusion, I could also just use nx adj
-        adj_index = dict()
-        for i in range(len(g.nodes)):
-            adj_index[list(g.nodes)[i]] = i
-        new_adj = diffuse_graph(g, adj, diff_range, adj_index)
+        new_adj = diffuse_graph(g, iterations)
         self.assertNotEqual(np.mean(new_adj), 0)
 
     def test_null_graph_equal(self):
@@ -124,18 +118,18 @@ class TestMain(unittest.TestCase):
 
     def test_bootstrap(self):
         """Checks if p-values for the graph are returned. """
-        results = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
         weights = nx.get_edge_attributes(results[0], 'weight')
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
         posnodes = sum(weights[x] > 0 for x in weights)
         ratio = posnodes / len(weights)
-        negthresh = np.percentile(results[2], percentage * (1 - ratio) / 2)
-        posthresh = np.percentile(results[2], 100 - percentage * ratio / 2)
-        neghubs = np.argwhere(results[2] < negthresh)
-        poshubs = np.argwhere(results[2] > posthresh)
-        bootmats = bootstrap_graph(results[0], results[2], iterations, diff_range, bootstraps, posthresh, negthresh)
-        self.assertEqual(results[2].shape, bootmats.shape)
+        negthresh = np.percentile(results[1], percentage * (1 - ratio) / 2)
+        posthresh = np.percentile(results[1], 100 - percentage * ratio / 2)
+        neghubs = np.argwhere(results[1] < negthresh)
+        poshubs = np.argwhere(results[1] > posthresh)
+        bootmats = perm_graph(results[0], results[1], limit, iterations, permutations, posthresh, negthresh)
+        self.assertEqual(results[1].shape, bootmats.shape)
 
     def test_tax_weights(self):
         """Checks whether the tax weights for the edges are correctly calculated."""
@@ -145,7 +139,7 @@ class TestMain(unittest.TestCase):
 
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
-        clustered_graph = cluster_graph(deepcopy(g), limit, diff_range, max_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 

@@ -47,15 +47,10 @@ def set_manca():
     parser.add_argument('-limit', '--convergence_limit',
                         dest='limit',
                         required=False,
-                        help='The convergence limit '
-                             'specifies how long the algorithm will repeat after '
-                             'reaching equal sparsity values. ',
-                        default=100)
-    parser.add_argument('-df', '--diffusion_range',
-                        dest='df',
-                        required=False,
-                        help='Diffusion is considered over a range of k neighbours. ',
-                        default=3)
+                        help='The error limit specifies how similar iterations '
+                             'of Markov clustering must be before the algorithm '
+                             'is considered to have reached convergence.  ',
+                        default=0.0000001)
     parser.add_argument('-mc', '--max_clusters',
                         dest='mc',
                         required=False,
@@ -65,7 +60,7 @@ def set_manca():
                         dest='iter',
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
-                        default=1000)
+                        default=10000)
     parser.add_argument('--central', dest='central', action='store_true',
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
@@ -116,9 +111,9 @@ def main():
         exit()
     # first need to convert network to undirected
     network = nx.to_undirected(network)
-    clustered = clus_central(network, limit=args['limit'], diff_range=args['df'],
-                      max_clusters=args['mc'], iterations=args['iter'],
-                      central=args['central'], percentage=args['p'], bootstraps=args['boot'])
+    clustered = clus_central(network, limit=args['limit'],
+                             max_clusters=args['mc'], iterations=args['iter'],
+                             central=args['central'], percentage=args['p'], permutations=args['boot'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -136,27 +131,25 @@ def main():
     sys.stdout.flush()
 
 
-def clus_central(graph, limit=100, diff_range=3, max_clusters=5, iterations=1000,
-          central=True, percentage=10, bootstraps=100):
+def clus_central(graph, limit=100, max_clusters=5, iterations=1000,
+                 central=True, percentage=10, permutations=100):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
     :param limit: Number of iterations to run until alg considers sparsity value converged.
-    :param diff_range: Diffusion range of network perturbation.
     :param max_clusters: Number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param central: If True, centrality values are calculated.
     :param percentage: Determines percentile thresholds.
-    :param bootstraps: Number of bootstrap iterations.
+    :param permutations: Number of permutations.
     :return:
     """
-    results = cluster_graph(graph, limit, diff_range, max_clusters, iterations)
+    results = cluster_graph(graph, limit, max_clusters, iterations)
     graph = results[0]
-    numbers = results[1]
-    matrix = results[2]
+    matrix = results[1]
     if central:
-        central_graph(matrix, graph, numbers, diff_range,
-                      percentage, bootstraps)
+        central_graph(matrix, graph, limit, iterations,
+                      percentage, permutations)
     return graph
 
 
