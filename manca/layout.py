@@ -25,6 +25,8 @@ import networkx as nx
 import sys
 from math import sin, cos, radians
 import csv
+from copy import deepcopy
+
 
 def generate_layout(graph, tax=None):
     """
@@ -66,6 +68,8 @@ def generate_layout(graph, tax=None):
             # need to scale coordinate system and transpose
             # spring_layout coordinates are placed in box of size[0,1]
             # transpose them vertically to box of size[0, 1*number of clusters]
+            subcoords[node][0] = subcoords[node][0] * 2
+            subcoords[node][1] = subcoords[node][1] * 2
             subcoords[node][1] += len(num_clusters)
         coord_list.append(subcoords)
     angles = 360 / len(num_clusters)
@@ -78,6 +82,8 @@ def generate_layout(graph, tax=None):
             for coord in subcoords:
                 new_x = cos(radians(spins)) * subcoords[coord][0] - sin(radians(spins)) * subcoords[coord][1]
                 new_y = sin(radians(spins)) * subcoords[coord][0] + cos(radians(spins)) * subcoords[coord][1]
+                new_x = new_x * 100
+                new_y = new_y * 100
                 new_coords[coord] = [new_x, new_y]
     return new_coords
 
@@ -93,9 +99,10 @@ def generate_tax_weights(graph, tax):
     :param tax: Taxonomy table
     :return:
     """
+    tax_levels = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
+    tax_weights = dict()
     if tax:
         taxdict = dict()
-        tax_levels = ['Kingdom', 'Phylum', 'Class', 'Order', 'Family', 'Genus', 'Species']
         for item in tax_levels:
             taxdict[item] = dict()
         taxdata = csv.reader(tax, delimiter='\t')
@@ -104,7 +111,6 @@ def generate_tax_weights(graph, tax):
             for i in range(1,len(row)):
                 if row[i] != 'NA' or 'None':
                     taxdict[tax_levels[i-1]][row[0]] = row[i]
-        tax_weights = dict()
         for edge in graph.edges:
             equal = True
             score = 7
@@ -122,9 +128,36 @@ def generate_tax_weights(graph, tax):
             # using Jaccard coefficient
             tax_weights[edge] = score
     else:
-        tax_weights = dict()
+        # if no taxonomy table is supplied, taxonomy can be present as node property
+        example_attrs = graph.nodes[list(graph.nodes)[0]]
+        tax_in_network = False
+        tax_network = deepcopy(tax_levels)
+        for attribute in example_attrs:
+            if attribute.lower() in tax_levels:
+                # need to make sure attribute names are correct, can be capitalized
+                tax_id = [tax_levels.index(i) for i in tax_levels if attribute.lower() in i]
+                tax_network[tax_id[0]] = attribute
+                tax_in_network = True
         for edge in graph.edges:
-            tax_weights[edge] = 1
+            equal = True
+            score = 7
+            # maximum score 7 means all taxonomic levels are equal
+            # attractive force in spring layout algorithm is then largest
+            for i in range(7):
+                try:
+                    if graph.nodes[edge[0]][tax_network[7-i]] != graph.nodes[edge[1]][tax_network[7-i]]:
+                        score -= 1
+                except IndexError:
+                    pass
+            # can also correct for interaction similarity
+            # structural equivalence: if nodes share many neighbours, they are similar
+            # even if taxonomic similarity is low, similar interaction patterns -> high score
+            # using Jaccard coefficient
+            tax_weights[edge] = score
+        if not tax_in_network:
+            # if no attribute has taxonomic values
+            for edge in graph.edges:
+                tax_weights[edge] = 1
     jaccard = nx.jaccard_coefficient(graph, list(tax_weights.keys()))
     for u, v, p in jaccard:
         edge = (u, v)

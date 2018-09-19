@@ -45,19 +45,24 @@ def set_manca():
                                  'graphml', 'adj', 'cyjs'],
                         default='cyjs')
     parser.add_argument('-limit', '--convergence_limit',
-                        dest='limit',
+                        dest='limit', type=float,
                         required=False,
                         help='The error limit specifies how similar iterations '
                              'of Markov clustering must be before the algorithm '
                              'is considered to have reached convergence.  ',
                         default=0.0000001)
-    parser.add_argument('-mc', '--max_clusters',
-                        dest='mc',
+    parser.add_argument('-max', '--max_clusters',
+                        dest='max', type=int,
                         required=False,
-                        help='Number of clusters to consider in K-means clustering. ',
+                        help='Maximum number of clusters to consider in K-means clustering. ',
                         default=4)
+    parser.add_argument('-min', '--min_clusters',
+                        dest='min', type=int,
+                        required=False,
+                        help='Minimum number of clusters to consider in K-means clustering. ',
+                        default=2)
     parser.add_argument('-iter', '--iterations',
-                        dest='iter',
+                        dest='iter', type=int,
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
                         default=10000)
@@ -69,18 +74,20 @@ def set_manca():
     parser.add_argument('-tax', '--taxonomy_table',
                         dest='tax',
                         help='Filepath to tab-delimited taxonomy table. '
-                             'This table is used to calculate edge weights during layout calculation.',
+                             'This table is used to calculate edge weights during layout calculation. '
+                             'If the taxonomy table is already included as node properties in the input network,'
+                             'these node properties are used instead. ',
                         default=None)
     parser.set_defaults(layout=False)
     parser.add_argument('-p', '--percentage',
-                        dest='p',
+                        dest='p', type=int,
                         required=False,
                         help='Percentage of central edges to return. ',
                         default=10)
-    parser.add_argument('-boot', '--bootstrap',
-                        dest='boot',
+    parser.add_argument('-perm', '--permutation',
+                        dest='perm', type=int,
                         required=False,
-                        help='Number of bootstrap iterations for centrality estimates. ',
+                        help='Number of permutation iterations for centrality estimates. ',
                         default=100)
     return parser
 
@@ -112,8 +119,8 @@ def main():
     # first need to convert network to undirected
     network = nx.to_undirected(network)
     clustered = clus_central(network, limit=args['limit'],
-                             max_clusters=args['mc'], iterations=args['iter'],
-                             central=args['central'], percentage=args['p'], permutations=args['boot'])
+                             max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
+                             central=args['central'], percentage=args['p'], permutations=args['perm'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -131,25 +138,26 @@ def main():
     sys.stdout.flush()
 
 
-def clus_central(graph, limit=100, max_clusters=5, iterations=1000,
+def clus_central(graph, limit=100, max_clusters=5, min_clusters=2, iterations=1000,
                  central=True, percentage=10, permutations=100):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
     :param limit: Number of iterations to run until alg considers sparsity value converged.
-    :param max_clusters: Number of clusters to evaluate in K-means clustering.
+    :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
+    :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param central: If True, centrality values are calculated.
     :param percentage: Determines percentile thresholds.
     :param permutations: Number of permutations.
     :return:
     """
-    results = cluster_graph(graph, limit, max_clusters, iterations)
+    results = cluster_graph(graph, limit=limit, max_clusters=max_clusters, min_clusters=min_clusters, iterations=iterations)
     graph = results[0]
     matrix = results[1]
     if central:
-        central_graph(matrix, graph, limit, iterations,
-                      percentage, permutations)
+        central_graph(matrix, graph, limit=limit, iterations=iterations,
+                      percentage=percentage, permutations=permutations)
     return graph
 
 

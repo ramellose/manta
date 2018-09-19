@@ -32,12 +32,11 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
 import sys
 from manca.perms import perm_graph, diffuse_graph
 
 
-def cluster_graph(graph, limit, max_clusters, iterations):
+def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -52,7 +51,8 @@ def cluster_graph(graph, limit, max_clusters, iterations):
     ----------
     :param graph: Weighted, undirected networkx graph.
     :param limit: Number of iterations to run until alg considers sparsity value converged.
-    :param max_clusters: Number of clusters to evaluate in K-means clustering.
+    :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
+    :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :return: NetworkX graph, number of iterations and diffusion matrix.
     """
@@ -69,24 +69,30 @@ def cluster_graph(graph, limit, max_clusters, iterations):
     bestcluster = None
     randomclust = np.random.randint(2, size=len(adj))
     scores = list()
+    scores.append(sparsity_score(graph, randomclust, rev_index))
+    sys.stdout.write('Sparsity level of k=2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
+    sys.stdout.flush()
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
-    scores.append(sparsity_score(graph, randomclust, rev_index))
     # select optimal cluster by silhouette score
-    for i in range(1, max_clusters+1):
+    for i in range(min_clusters, max_clusters+1):
         clusters = KMeans(i).fit_predict(scoremat)
-        scores.append(sparsity_score(graph, clusters, rev_index))
-    topscore = int(np.argmin(scores))
-    if topscore != 0:
-        sys.stdout.write('Sparsity level of k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+        score = sparsity_score(graph, clusters, rev_index)
+        scores.append(score)
+        sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+        sys.stdout.flush()
+    topscore = int(np.argmin(scores)) + min_clusters - 1
+    if topscore >= min_clusters:
+        sys.stdout.write('Lowest sparsity level for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
         sys.stdout.flush()
     else:
-        sys.stdout.write('Warning: random clustering performed best. \n')
+        sys.stdout.write('Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
+        topscore = min_clusters
     clusdict = dict()
     bestcluster = KMeans(topscore).fit_predict(scoremat)
     for i in range(len(graph.nodes)):
-        clusdict[list(graph.nodes)[i]] = bestcluster[i]
+        clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
     return graph, scoremat
 
@@ -125,7 +131,8 @@ def central_graph(matrix, graph, percentage=10, permutations=10000, iterations=1
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
     if permutations > 0:
-        pvals = perm_graph(graph, matrix, limit, iterations, permutations, posthresh, negthresh)
+        pvals = perm_graph(graph, matrix, limit=limit, iterations=iterations,
+                           permutations=permutations, posthresh=posthresh, negthresh=negthresh)
     # need to make sure graph is undirected
     graph = nx.to_undirected(graph)
     # initialize empty dictionary to store edge ID

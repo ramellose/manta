@@ -167,8 +167,9 @@ def write_cyjson(filename, graph, layout=None):
         n["data"]["value"] = i
         n["data"]["name"] = j.get(name) or str(i)
         if layout:
-            n["position"]["x"] = layout["id"][0]
-            n["position"]["y"] = layout["id"][1]
+            n["position"] = dict()
+            n["position"]["x"] = layout[i][0]
+            n["position"]["y"] = layout[i][1]
         nodes.append(n)
 
     for e in graph.edges():

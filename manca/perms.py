@@ -34,8 +34,7 @@ import numpy as np
 def null_graph(graph):
     """
     Returns a rewired copy of the original graph.
-    The rewiring procedure preserves degree
-    as well as connectedness.
+    The rewiring procedure preserves degree of each node.
     The number of rewirings is the square of the node amount.
     This ensures the network is completely randomized.
     The weight of the edges also needs to be normalized.
@@ -47,9 +46,9 @@ def null_graph(graph):
     :param graph: Original graph.
     :return: NetworkX graph
     """
-    model = deepcopy(graph)
+    model = graph.copy()
     swaps = len(model.nodes) ** 2
-    nx.algorithms.connected_double_edge_swap(model, nswap=swaps)
+    nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
     model = nx.to_undirected(model)
     edge_weights = list()
     for edge in graph.edges:
@@ -104,14 +103,14 @@ def perm_graph(graph, matrix, limit, iterations, permutations, posthresh, negthr
     :param negthresh: Negative threshold for edges
     :return: Matrix of p-values
     """
-    boots = list()
+    perms = list()
     for i in range(permutations):
-        bootstrap = null_graph(graph)
-        adj = diffuse_graph(bootstrap, limit, iterations)
-        boots.append(adj)
+        permutation = null_graph(graph)
+        adj = diffuse_graph(permutation, limit, iterations)
+        perms.append(adj)
         sys.stdout.write('Permutation iteration ' + str(i) + '\n')
         sys.stdout.flush()
-    central_pvals = perm_test(matrix, boots, posthresh, negthresh)
+    central_pvals = perm_test(matrix, perms, posthresh, negthresh)
     return central_pvals
 
 
