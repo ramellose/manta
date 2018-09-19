@@ -11,12 +11,13 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manca.manca import clus_central
-from manca.cluster import central_graph, cluster_graph, diffuse_graph
+from manca.cluster import central_graph, cluster_graph, diffuse_graph, sparsity_score
 from manca.perms import null_graph, perm_graph
 from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
 from io import StringIO
+from sklearn.cluster import KMeans
 
 g = nx.Graph()
 nodes = ["OTU_1", "OTU_2", "OTU_3", "OTU_4", "OTU_5",
@@ -100,6 +101,20 @@ class TestMain(unittest.TestCase):
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
+
+    def test_sparsity_score(self):
+        """Checks whether correct sparsity scores are calculated.
+        Because this network has 3 negative edges separating
+        2 clusters, the score should be -3. """
+        scoremat = diffuse_graph(g, limit, iterations)
+        clusters = KMeans(2).fit_predict(scoremat)
+        adj_index = dict()
+        for i in range(len(g.nodes)):
+            adj_index[list(g.nodes)[i]] = i
+        rev_index = {v: k for k, v in adj_index.items()}
+        sparsity = sparsity_score(g, clusters, rev_index)
+        self.assertEqual(sparsity, -3)
+
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """

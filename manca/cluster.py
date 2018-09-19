@@ -68,46 +68,23 @@ def cluster_graph(graph, limit, max_clusters, iterations):
     scoremat = diffuse_graph(graph, limit, iterations)
     bestcluster = None
     randomclust = np.random.randint(2, size=len(adj))
-    try:
-        sh_score = [silhouette_score(scoremat, randomclust)]
-    except ValueError:
-        sh_score = [0]  # the randomclust can result in all 1s or 0s which crashes
+    scores = list()
+    # the randomclust is a random separation into two clusters
+    # if K-means can't beat this, the user is given a warning
+    scores.append(sparsity_score(graph, randomclust, rev_index))
     # select optimal cluster by silhouette score
     for i in range(1, max_clusters+1):
         clusters = KMeans(i).fit_predict(scoremat)
-        try:
-            silhouette_avg = silhouette_score(scoremat, clusters)
-        except ValueError:
-            # if only 1 cluster label is defined this can crash
-            silhouette_avg = 0
-        sh_score.append(silhouette_avg)
-    topscore = int(np.argmax(sh_score))
+        scores.append(sparsity_score(graph, clusters, rev_index))
+    topscore = int(np.argmin(scores))
     if topscore != 0:
-        bestcluster = KMeans(topscore).fit_predict(scoremat)
-        # with bestcluster defined,
-        # sparsity of cut can be calculated
-        sparsity = 0
-        for cluster_id in set(bestcluster):
-            node_ids = list(np.where(bestcluster == cluster_id)[0])
-            node_ids = [rev_index.get(item, item) for item in node_ids]
-            cluster = graph.subgraph(node_ids)
-            # per cluster node:
-            # edges that are not inside cluster are part of cut-set
-            # total cut-set should be as small as possible
-            for node in cluster.nodes:
-                nbs = graph.neighbors(node)
-                for nb in nbs:
-                    if nb not in node_ids:
-                        # only add 1 to sparsity if it is a positive edge
-                        # otherwise subtract 1
-                        cut = graph[node][nb]['weight']
-                        if cut > 0:
-                            sparsity += 1
-                        else:
-                            sparsity -= 1
-    sys.stdout.write('Sparsity level of clusters: ' + str(sparsity) + '\n')
-    sys.stdout.flush()
+        sys.stdout.write('Sparsity level of k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+        sys.stdout.flush()
+    else:
+        sys.stdout.write('Warning: random clustering performed best. \n')
+        sys.stdout.flush()
     clusdict = dict()
+    bestcluster = KMeans(topscore).fit_predict(scoremat)
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = bestcluster[i]
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
@@ -172,3 +149,44 @@ def central_graph(matrix, graph, percentage=10, permutations=10000, iterations=1
         nx.set_edge_attributes(graph, values=edge_pvals, name='hub p-value')
 
 
+def sparsity_score(graph, clusters, rev_index):
+    """
+    Given a graph, and a list of cluster identities,
+    this function calculates how many edges need to be cut
+    to assign these cluster identities.
+    Cuts through positively-weighted edges are penalized,
+    whereas cuts through negatively-weighted edges are rewarded.
+    The lowest sparsity score represents the best clustering.
+    :param graph: NetworkX weighted, undirected graph
+    :param clusters: List of cluster identities
+    :param rev_index: Index matching node ID to matrix index
+    :return: Sparsity score
+    """
+    sparsity = 0
+    edges = list()
+    for cluster_id in set(clusters):
+        # get the set of edges that is NOT in either cluster
+        node_ids = list(np.where(clusters == cluster_id)[0])
+        node_ids = [rev_index.get(item, item) for item in node_ids]
+        cluster = graph.subgraph(node_ids)
+        edges.extend(list(cluster.edges))
+        # penalize for having negative edges inside cluster
+        weights = nx.get_edge_attributes(cluster, 'weight')
+        for x in weights:
+            if weights[x] < 0:
+                sparsity += 1
+    all_edges = list(graph.edges)
+    cuts = list()
+    for edge in all_edges:
+        if edge not in edges and (edge[1], edge[0]) not in edges:
+            # problem with cluster edges having swapped orders
+            cuts.append(edge)
+    for edge in cuts:
+        # only add 1 to sparsity if it is a positive edge
+        # otherwise subtract 1
+        cut = graph[edge[0]][edge[1]]['weight']
+        if cut > 0:
+            sparsity += 1
+        else:
+            sparsity -= 1
+    return sparsity
