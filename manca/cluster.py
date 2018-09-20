@@ -4,16 +4,14 @@
 The clustering algorithm works in several steps. First, an empty adjacency matrix is instantiated.
 Then, the following steps are carried out until sparsity has stabilized:
 
-1. Choose a random node i and select k-neighbours for k in diffusion range
-2. For each node b in k-neighbours, multiply 1 by the edge weight of edge (i, b) and the value generated from (i, k-1)
-3. Perform K-Means clustering on the resulting diffusion score matrix
-4. Calculate sparsity of clusters;
-            positively weighted edges between clusters add 1 to the sparsity value
-            negatively weighted edges between clusters subtract 1 of the sparsity value
-5. Sparsity lower than previous sparsity? --> continue iterating
-   Sparsity equal to previous sparsity? --> iterate until convergence limit is reached
+1. Raise the matrix to power 2
+2. Normalize matrix by absolute maximum value
+3. Add 1 / value for each value in matrix
+4. Normalize matrix by absolute maximum value
+5. Calculate error by subtracting previous matrix from current matrix
+6. If error threshold is reached, the algorithm stops
 
-The number of iterations and the generated matrix is then supplied to the centrality function.
+The generated score matrices and flow matrices are then supplied to the centrality function.
 The centrality of an edge is calculated by the value of an edge in the matrix.
 Hence, this does not imply that an edge had a large effect on other edges;
 rather, it implies that it was affected by many of the diffusion processes during the iterations.
@@ -31,13 +29,15 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.metrics import silhouette_score
 import sys
 from manca.perms import perm_graph, diffuse_graph
 from scipy.stats import binom_test
 
 
-def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
+def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
+                  mode='sparsity', cluster='DBSCAN'):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -55,7 +55,9 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
-    :return: NetworkX graph, number of iterations and diffusion matrix.
+    :param mode: Criterion for evaluating clusters.
+    :param cluster: Algorithm for clustering of score matrix.
+    :return: NetworkX graph, score matrix and diffusion matrix.
     """
     adj = np.zeros((len(graph.nodes), len(graph.nodes)))  # this considers diffusion, I could also just use nx adj
     adj_index = dict()
@@ -66,39 +68,56 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat = diffuse_graph(graph, limit, iterations)
+    diffusion = diffuse_graph(graph, limit, iterations)
+    scoremat = diffusion[0]
     bestcluster = None
     randomclust = np.random.randint(2, size=len(adj))
     scores = list()
     scores.append(sparsity_score(graph, randomclust, rev_index))
-    sys.stdout.write('Sparsity level of k=2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
+    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
     sys.stdout.flush()
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by silhouette score
-    for i in range(min_clusters, max_clusters+1):
-        clusters = KMeans(i).fit_predict(scoremat)
-        score = sparsity_score(graph, clusters, rev_index)
-        scores.append(score)
-        sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-        sys.stdout.flush()
-    topscore = int(np.argmin(scores)) + min_clusters - 1
-    if topscore >= min_clusters:
-        sys.stdout.write('Lowest sparsity level for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
-        sys.stdout.flush()
-    else:
-        sys.stdout.write('Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
-        sys.stdout.flush()
-        topscore = min_clusters
+    if cluster == 'KMeans':
+        for i in range(min_clusters, max_clusters+1):
+            clusters = KMeans(i).fit_predict(scoremat)
+            if mode == 'sparsity':
+                score = sparsity_score(graph, clusters, rev_index)
+                sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+                sys.stdout.flush()
+            elif mode == 'silhouette':
+                score = silhouette_score(scoremat, clusters)
+                sys.stdout.write('Silhouette score of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+                sys.stdout.flush()
+            scores.append(score)
+        topscore = int(np.argmin(scores)) + min_clusters - 1
+        if topscore >= min_clusters:
+            sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+            sys.stdout.flush()
+        else:
+            sys.stdout.write('Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
+            sys.stdout.flush()
+            topscore = min_clusters
+        bestcluster = KMeans(topscore).fit_predict(scoremat)
+    elif cluster == 'DBSCAN':
+        bestcluster = DBSCAN(min_samples=len(graph.nodes) / max_clusters).fit_predict(scoremat)
+        if mode == 'sparsity':
+            score = sparsity_score(graph, bestcluster, rev_index)
+            sys.stdout.write('Sparsity level of ' + str(len(set(bestcluster))) + ' clusters: ' + str(score) + '\n')
+            sys.stdout.flush()
+        elif mode == 'silhouette':
+            score = silhouette_score(scoremat, bestcluster)
+            sys.stdout.write('Silhouette score of k=' + str(len(set(bestcluster)))  + ' clusters: ' + str(score) + '\n')
+            sys.stdout.flush()
     clusdict = dict()
-    bestcluster = KMeans(topscore).fit_predict(scoremat)
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
-    return graph, scoremat
+    return graph, diffusion
 
 
-def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=1000, limit=0.00001):
+def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=20, limit=0.00001):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
@@ -112,7 +131,7 @@ def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=10
 
     Parameters
     ----------
-    :param matrix: Outcome of diffusion process from cluster_graph.
+    :param matrix: Outcome of flow process from cluster_graph.
     :param graph: NetworkX graph of a microbial association network.
     :param iterations: The number of iterations carried out by the clustering algorithm.
     :param percentage: Determines percentile of hub species to return.

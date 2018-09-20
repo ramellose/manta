@@ -89,6 +89,18 @@ def set_manca():
                         required=False,
                         help='Number of permutation iterations for centrality estimates. ',
                         default=100)
+    parser.add_argument('-score', '--clustering_score',
+                        dest='score', type=str,
+                        choices=['silhouette', 'sparsity'],
+                        required=False,
+                        help='Determines which criterion is used to decide on the optimal cluster number. ',
+                        default='sparsity')
+    parser.add_argument('-cluster', '--clustering_algorithm',
+                        dest='cluster', type=str,
+                        choices=['KMeans', 'DBSCAN'],
+                        required=False,
+                        help='Choice for clustering algorithm. ',
+                        default='DBSCAN')
     return parser
 
 
@@ -120,7 +132,8 @@ def main():
     network = nx.to_undirected(network)
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
-                             central=args['central'], percentage=args['p'], permutations=args['perm'])
+                             central=args['central'], percentage=args['p'], permutations=args['perm'],
+                             mode=args['score'], cluster=args['cluster'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -138,8 +151,8 @@ def main():
     sys.stdout.flush()
 
 
-def clus_central(graph, limit=100, max_clusters=5, min_clusters=2, iterations=1000,
-                 central=True, percentage=10, permutations=100):
+def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,
+                 central=True, percentage=10, permutations=100, mode='sparsity', cluster='DBSCAN'):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -150,11 +163,15 @@ def clus_central(graph, limit=100, max_clusters=5, min_clusters=2, iterations=10
     :param central: If True, centrality values are calculated.
     :param percentage: Determines percentile thresholds.
     :param permutations: Number of permutations.
+    :param mode: Criterion for evaluating clusters.
+    :param cluster: Algorithm for clustering of diffusion matrix.
     :return:
     """
-    results = cluster_graph(graph, limit=limit, max_clusters=max_clusters, min_clusters=min_clusters, iterations=iterations)
+    results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
+                            min_clusters=min_clusters, iterations=iterations,
+                            mode=mode, cluster=cluster)
     graph = results[0]
-    matrix = results[1]
+    matrix = results[1][1]
     if central:
         central_edge(matrix, graph, limit=limit, iterations=iterations,
                      percentage=percentage, permutations=permutations)

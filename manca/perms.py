@@ -29,6 +29,7 @@ from random import choice
 import networkx as nx
 from copy import deepcopy
 import numpy as np
+from math import log
 
 
 def null_graph(graph):
@@ -106,7 +107,7 @@ def perm_graph(graph, matrix, limit, iterations, permutations, posthresh, negthr
     perms = list()
     for i in range(permutations):
         permutation = null_graph(graph)
-        adj = diffuse_graph(permutation, limit, iterations)
+        adj = diffuse_graph(permutation, limit, iterations)[1]
         perms.append(adj)
         sys.stdout.write('Permutation iteration ' + str(i) + '\n')
         sys.stdout.flush()
@@ -122,7 +123,7 @@ def diffuse_graph(graph, limit=0.0000001, iterations=10000):
     in the MCL algorithm has been adjusted to accomodate
     for negative signs.
     In the first step, the matrix is scaled;
-    afterwards, the matrix is raised to a power 2.
+    afterwards, every value in the matrix has 1 divided by the value added.
     Subsequently, the matrix is scaled. The
     cumulative error, relative to the previous iteration,
     is calculated by taking the mean of the difference.
@@ -132,9 +133,11 @@ def diffuse_graph(graph, limit=0.0000001, iterations=10000):
     :return:
     """
     scoremat = nx.to_numpy_matrix(graph)
+    flowmat = scoremat.copy()
     # if the 'weight' property of the graph is set correctly
     # weight in the adj graph should equal this
     error = 1
+    prev_error = 0
     iters = 0
     while error > limit and iters < iterations:
         updated_mat = np.linalg.matrix_power(scoremat, 2)
@@ -142,12 +145,18 @@ def diffuse_graph(graph, limit=0.0000001, iterations=10000):
         # squaring the matrix without normalisation
         # is equal to a a Galton-Watson branching process
         updated_mat = updated_mat / abs(np.max(updated_mat))
+        # the flow matrix describes flow and is output to compute centralities
         # in the MCL implementation, the rows are normalized to sum to 1
         # this creates a column stochastic matrix
         # here, we normalize by dividing with absolute largest value
         # normally, there is an inflation step; values are raised to a power
         # with this normalisation, the inflation step causes
         # the algorithm to converge to 0
+        # we need above-0 values to converge to -1, and the rest to 1
+        for value in np.nditer(updated_mat, op_flags=['readwrite']):
+            if value != 0:
+                value[...] = value + (1 / value)
+        updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(np.mean(updated_mat - scoremat))
         sys.stdout.write('Current error: ' + str(error) + '\n')
         sys.stdout.flush()
@@ -156,4 +165,11 @@ def diffuse_graph(graph, limit=0.0000001, iterations=10000):
     if iters == iterations:
         sys.stdout.write('Warning: algorithm did not converge.' + '\n')
         sys.stdout.flush()
-    return scoremat
+    for i in range(iters):
+        flowmat = np.linalg.matrix_power(flowmat, 2)
+        # expansion step
+        # squaring the matrix without normalisation
+        # is equal to a a Galton-Watson branching process
+        flowmat = flowmat / abs(np.max(flowmat))
+    return scoremat, flowmat
+

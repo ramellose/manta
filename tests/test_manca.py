@@ -51,10 +51,12 @@ g = g.to_undirected()
 limit = 0.000001
 min_clusters = 2
 max_clusters = 5
-iterations = 10000
+iterations = 20
 central = True
 percentage = 10
 permutations = 100
+cluster = 'DBSCAN'
+mode = 'sparsity'
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
 OTU_1	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Synechococcus	NA
@@ -92,7 +94,7 @@ class TestMain(unittest.TestCase):
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         graph = results[0]
-        matrix = results[1]
+        matrix = results[1][1]
         central_edge(matrix, graph, percentage, permutations, iterations)
         hubs = nx.get_edge_attributes(graph, 'hub')
         self.assertEqual(hubs[list(hubs.keys())[0]], 'negative hub')
@@ -104,7 +106,7 @@ class TestMain(unittest.TestCase):
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         graph = results[0]
-        matrix = results[1]
+        matrix = results[1][1]
         central_edge(matrix, graph, percentage, permutations, iterations)
         central_node(graph)
         self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
@@ -119,7 +121,7 @@ class TestMain(unittest.TestCase):
         """Checks whether correct sparsity scores are calculated.
         Because this network has 3 negative edges separating
         2 clusters, the score should be -3. """
-        scoremat = diffuse_graph(g, limit, iterations)
+        scoremat = diffuse_graph(g, limit, iterations)[0]
         clusters = KMeans(2).fit_predict(scoremat)
         adj_index = dict()
         for i in range(len(g.nodes)):
@@ -149,14 +151,15 @@ class TestMain(unittest.TestCase):
         weights = nx.get_edge_attributes(results[0], 'weight')
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
+        matrix = results[1][1]
         posnodes = sum(weights[x] > 0 for x in weights)
         ratio = posnodes / len(weights)
-        negthresh = np.percentile(results[1], percentage * (1 - ratio) / 2)
-        posthresh = np.percentile(results[1], 100 - percentage * ratio / 2)
-        neghubs = np.argwhere(results[1] < negthresh)
-        poshubs = np.argwhere(results[1] > posthresh)
-        bootmats = perm_graph(results[0], results[1], limit, iterations, permutations, posthresh, negthresh)
-        self.assertEqual(results[1].shape, bootmats.shape)
+        negthresh = np.percentile(matrix, percentage * (1 - ratio) / 2)
+        posthresh = np.percentile(matrix, 100 - percentage * ratio / 2)
+        neghubs = np.argwhere(matrix < negthresh)
+        poshubs = np.argwhere(matrix > posthresh)
+        bootmats = perm_graph(results[0], matrix, limit, iterations, permutations, posthresh, negthresh)
+        self.assertEqual(matrix.shape, bootmats.shape)
 
     def test_tax_weights(self):
         """Checks whether the tax weights for the edges are correctly calculated."""
