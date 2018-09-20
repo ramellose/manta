@@ -16,7 +16,7 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import sys
 import argparse
-from manca.cluster import cluster_graph, central_graph
+from manca.cluster import cluster_graph, central_edge, central_node
 from manca.cyjson import write_cyjson, read_cyjson
 from manca.layout import generate_layout
 
@@ -156,8 +156,9 @@ def clus_central(graph, limit=100, max_clusters=5, min_clusters=2, iterations=10
     graph = results[0]
     matrix = results[1]
     if central:
-        central_graph(matrix, graph, limit=limit, iterations=iterations,
-                      percentage=percentage, permutations=permutations)
+        central_edge(matrix, graph, limit=limit, iterations=iterations,
+                     percentage=percentage, permutations=permutations)
+        central_node(graph)
     return graph
 
 

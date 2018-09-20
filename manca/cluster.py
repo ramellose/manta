@@ -34,6 +34,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 import sys
 from manca.perms import perm_graph, diffuse_graph
+from scipy.stats import binom_test
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
@@ -97,7 +98,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations):
     return graph, scoremat
 
 
-def central_graph(matrix, graph, percentage=10, permutations=10000, iterations=1000, limit=0.00001):
+def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=1000, limit=0.00001):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
@@ -154,6 +155,43 @@ def central_graph(matrix, graph, percentage=10, permutations=10000, iterations=1
     nx.set_edge_attributes(graph, values=edge_vals, name='hub')
     if permutations > 0:
         nx.set_edge_attributes(graph, values=edge_pvals, name='hub p-value')
+
+
+def central_node(graph):
+    """
+    Given a graph with hub edges assigned (see central_edge),
+    this function checks whether a node is significantly more connected
+    to edges with high scores than expected by chance.
+    The p-value is calculated with a binomial test.
+    Edge sign is ignored; hubs can have both positive and negative
+    edges.
+    :param graph: NetworkX graph with edge centrality scores assigned
+    :return: NetworkX graph with hub centrality for nodes
+    """
+    edges = nx.get_edge_attributes(graph, "hub")
+    hubs = list()
+    for edge in edges:
+        hubs.append(edge[0])
+        hubs.append(edge[1])
+    hubs = list(set(hubs))
+    sighubs = dict()
+    pvals = dict()
+    for node in hubs:
+        hub_edges = 0
+        for edge in graph[node]:
+            if 'hub' in graph[node][edge]:
+                hub_edges += 1
+        # given that some of the edges
+        # this is compared to the total edge number of the node
+        # probability is calculated by dividing total number of hub edges in graph
+        # by total number of edges in graph
+        pval = binom_test(hub_edges, len(graph[node]),
+                          (len(edges)/len(graph.edges)), alternative='greater')
+        if pval < 0.05:
+            sighubs[node] = 'hub'
+            pvals[node] = pval
+    nx.set_node_attributes(graph, values=sighubs, name='hub')
+    nx.set_node_attributes(graph, values=pvals, name='hub p-value')
 
 
 def sparsity_score(graph, clusters, rev_index):

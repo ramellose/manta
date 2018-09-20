@@ -1,6 +1,6 @@
 import networkx as nx
 from manca.manca import clus_central
-from manca.cluster import central_graph, cluster_graph, diffuse_graph
+from manca.cluster import central_edge, cluster_graph, diffuse_graph
 from manca.perms import null_graph, perm_graph, diffuse_graph
 from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
@@ -174,3 +174,16 @@ concat_clip.write_videofile("test.mp4", fps=4)
 from subprocess import call
 for name in names:
     call("rm " + name)
+
+args = {'graph': 'C://Users//u0118219//Documents//clusters//arctic_network.cyjs',
+ 'fp': 'C://Users//u0118219//Documents//clusters//clustered_arctic.cyjs',
+ 'f': 'cyjs',
+ 'limit': 1e-07,
+ 'max': '8',
+ 'min': 2,
+ 'iter': 10000,
+ 'central': True,
+ 'layout': True,
+ 'tax': None,
+ 'p': 10,
+ 'perm': 100}

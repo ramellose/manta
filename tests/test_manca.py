@@ -11,7 +11,7 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manca.manca import clus_central
-from manca.cluster import central_graph, cluster_graph, diffuse_graph, sparsity_score
+from manca.cluster import central_edge, cluster_graph, diffuse_graph, sparsity_score, central_node
 from manca.perms import null_graph, perm_graph
 from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
@@ -49,6 +49,7 @@ nx.set_edge_attributes(g, values=weights, name='weight')
 g = g.to_undirected()
 
 limit = 0.000001
+min_clusters = 2
 max_clusters = 5
 iterations = 10000
 central = True
@@ -89,16 +90,28 @@ class TestMain(unittest.TestCase):
         WARNING: at the moment the test indicates that centrality measures
         are not stable.
         """
-        results = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         graph = results[0]
         matrix = results[1]
-        central_graph(matrix, graph, percentage, permutations, iterations)
+        central_edge(matrix, graph, percentage, permutations, iterations)
         hubs = nx.get_edge_attributes(graph, 'hub')
         self.assertEqual(hubs[list(hubs.keys())[0]], 'negative hub')
 
+    def test_central_node(self):
+        """
+        Checks if, given a graph that has been tested for centrality,
+        no nodes are identified as hubs (actually the p-value is too low).
+        """
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        graph = results[0]
+        matrix = results[1]
+        central_edge(matrix, graph, percentage, permutations, iterations)
+        central_node(graph)
+        self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
+
     def test_cluster_manca(self):
         """Checks whether the correct cluster IDs are assigned. """
-        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
 
@@ -114,7 +127,6 @@ class TestMain(unittest.TestCase):
         rev_index = {v: k for k, v in adj_index.items()}
         sparsity = sparsity_score(g, clusters, rev_index)
         self.assertEqual(sparsity, -3)
-
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """
@@ -133,7 +145,7 @@ class TestMain(unittest.TestCase):
 
     def test_bootstrap(self):
         """Checks if p-values for the graph are returned. """
-        results = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         weights = nx.get_edge_attributes(results[0], 'weight')
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
@@ -154,7 +166,7 @@ class TestMain(unittest.TestCase):
 
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
-        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 

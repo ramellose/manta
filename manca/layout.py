@@ -138,23 +138,24 @@ def generate_tax_weights(graph, tax):
                 tax_id = [tax_levels.index(i) for i in tax_levels if attribute.lower() in i]
                 tax_network[tax_id[0]] = attribute
                 tax_in_network = True
-        for edge in graph.edges:
-            equal = True
-            score = 7
-            # maximum score 7 means all taxonomic levels are equal
-            # attractive force in spring layout algorithm is then largest
-            for i in range(7):
-                try:
-                    if graph.nodes[edge[0]][tax_network[7-i]] != graph.nodes[edge[1]][tax_network[7-i]]:
-                        score -= 1
-                except IndexError:
-                    pass
-            # can also correct for interaction similarity
-            # structural equivalence: if nodes share many neighbours, they are similar
-            # even if taxonomic similarity is low, similar interaction patterns -> high score
-            # using Jaccard coefficient
-            tax_weights[edge] = score
-        if not tax_in_network:
+        if tax_in_network:
+            for edge in graph.edges:
+                equal = True
+                score = 7
+                # maximum score 7 means all taxonomic levels are equal
+                # attractive force in spring layout algorithm is then largest
+                for i in range(7):
+                    try:
+                        if graph.nodes[edge[0]][tax_network[7-i]] != graph.nodes[edge[1]][tax_network[7-i]]:
+                            score -= 1
+                    except IndexError:
+                        pass
+                # can also correct for interaction similarity
+                # structural equivalence: if nodes share many neighbours, they are similar
+                # even if taxonomic similarity is low, similar interaction patterns -> high score
+                # using Jaccard coefficient
+                tax_weights[edge] = score
+        else:
             # if no attribute has taxonomic values
             for edge in graph.edges:
                 tax_weights[edge] = 1
