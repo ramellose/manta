@@ -65,7 +65,7 @@ def set_manca():
                         dest='iter', type=int,
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
-                        default=50)
+                        default=10)
     parser.add_argument('--central', dest='central', action='store_true',
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
