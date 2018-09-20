@@ -50,7 +50,7 @@ def set_manca():
                         help='The error limit specifies how similar iterations '
                              'of Markov clustering must be before the algorithm '
                              'is considered to have reached convergence.  ',
-                        default=0.0000001)
+                        default=0.0001)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
@@ -65,7 +65,7 @@ def set_manca():
                         dest='iter', type=int,
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
-                        default=10000)
+                        default=50)
     parser.add_argument('--central', dest='central', action='store_true',
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)

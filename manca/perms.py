@@ -115,7 +115,7 @@ def perm_graph(graph, matrix, limit, iterations, permutations, posthresh, negthr
     return central_pvals
 
 
-def diffuse_graph(graph, limit=0.0000001, iterations=10000):
+def diffuse_graph(graph, limit=0.00001, iterations=50):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
