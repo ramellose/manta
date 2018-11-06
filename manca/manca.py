@@ -89,12 +89,6 @@ def set_manca():
                         required=False,
                         help='Number of permutation iterations for centrality estimates. ',
                         default=100)
-    parser.add_argument('-score', '--clustering_score',
-                        dest='score', type=str,
-                        choices=['silhouette', 'sparsity'],
-                        required=False,
-                        help='Determines which criterion is used to decide on the optimal cluster number. ',
-                        default='sparsity')
     parser.add_argument('-cluster', '--clustering_algorithm',
                         dest='cluster', type=str,
                         choices=['KMeans', 'DBSCAN'],
@@ -133,7 +127,7 @@ def main():
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
                              central=args['central'], percentage=args['p'], permutations=args['perm'],
-                             mode=args['score'], cluster=args['cluster'])
+                             cluster=args['cluster'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -152,7 +146,7 @@ def main():
 
 
 def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,
-                 central=True, percentage=10, permutations=100, mode='sparsity', cluster='DBSCAN'):
+                 central=True, percentage=10, permutations=100, cluster='DBSCAN'):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -169,7 +163,7 @@ def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iteration
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
                             min_clusters=min_clusters, iterations=iterations,
-                            mode=mode, cluster=cluster)
+                            cluster=cluster)
     graph = results[0]
     matrix = results[1][1]
     if central:

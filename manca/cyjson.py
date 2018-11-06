@@ -98,7 +98,7 @@ def read_cyjson(filename):
         targ = d["data"].pop("target")
         graph.add_edge(sour, targ)
         graph.edges[sour, targ].update(edge_data)
-    if 'interactionType' in g.edges[list(graph.edges)[0]]:
+    if 'interactionType' in graph.edges[list(graph.edges)[0]]:
         # this indicates this is a CoNet import
         for edge in graph.edges:
             if graph.edges[edge]['interactionType'] == 'copresence':

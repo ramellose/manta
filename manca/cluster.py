@@ -30,7 +30,6 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
-from sklearn.metrics import silhouette_score
 import sys
 from manca.perms import perm_graph, diffuse_graph
 from scipy.stats import binom_test
@@ -78,18 +77,13 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     sys.stdout.flush()
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
-    # select optimal cluster by silhouette score
+    # select optimal cluster by sparsity score
     if cluster == 'KMeans':
         for i in range(min_clusters, max_clusters+1):
             clusters = KMeans(i).fit_predict(scoremat)
-            if mode == 'sparsity':
-                score = sparsity_score(graph, clusters, rev_index)
-                sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-                sys.stdout.flush()
-            elif mode == 'silhouette':
-                score = silhouette_score(scoremat, clusters)
-                sys.stdout.write('Silhouette score of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-                sys.stdout.flush()
+            score = sparsity_score(graph, clusters, rev_index)
+            sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+            sys.stdout.flush()
             scores.append(score)
         topscore = int(np.argmin(scores)) + min_clusters - 1
         if topscore >= min_clusters:
@@ -102,14 +96,9 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
         bestcluster = KMeans(topscore).fit_predict(scoremat)
     elif cluster == 'DBSCAN':
         bestcluster = DBSCAN(min_samples=len(graph.nodes) / max_clusters).fit_predict(scoremat)
-        if mode == 'sparsity':
-            score = sparsity_score(graph, bestcluster, rev_index)
-            sys.stdout.write('Sparsity level of ' + str(len(set(bestcluster))) + ' clusters: ' + str(score) + '\n')
-            sys.stdout.flush()
-        elif mode == 'silhouette':
-            score = silhouette_score(scoremat, bestcluster)
-            sys.stdout.write('Silhouette score of k=' + str(len(set(bestcluster)))  + ' clusters: ' + str(score) + '\n')
-            sys.stdout.flush()
+        score = sparsity_score(graph, bestcluster, rev_index)
+        sys.stdout.write('Sparsity level of ' + str(len(set(bestcluster))) + ' clusters: ' + str(score) + '\n')
+        sys.stdout.flush()
     clusdict = dict()
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
