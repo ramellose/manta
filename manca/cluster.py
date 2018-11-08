@@ -36,7 +36,7 @@ from scipy.stats import binom_test
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
-                  cluster='DBSCAN'):
+                  cluster='KMeans'):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -54,7 +54,6 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
-    :param mode: Criterion for evaluating clusters.
     :param cluster: Algorithm for clustering of score matrix.
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
@@ -124,7 +123,6 @@ def central_edge(graph, percentile, permutations, error):
 
     Parameters
     ----------
-    :param matrix: Outcome of flow process from cluster_graph.
     :param graph: NetworkX graph of a microbial association network.
     :param percentile: Determines percentile of hub species to return.
     :param permutations: Number of permutations to carry out. If 0, no permutation test is done.

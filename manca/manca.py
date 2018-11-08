@@ -153,7 +153,7 @@ def main():
 
 
 def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,
-                 central=True, percentile=10, permutations=100, cluster='DBSCAN', error=0.1):
+                 central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -164,8 +164,8 @@ def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iteration
     :param central: If True, centrality values are calculated.
     :param percentile: Determines percentile thresholds.
     :param permutations: Number of permutations.
-    :param mode: Criterion for evaluating clusters.
     :param cluster: Algorithm for clustering of diffusion matrix.
+    :param error: Fraction of edges to rewire for reliability tests.
     :return:
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,

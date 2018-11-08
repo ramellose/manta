@@ -12,7 +12,7 @@ import unittest
 import networkx as nx
 from manca.manca import clus_central
 from manca.cluster import central_edge, cluster_graph, diffuse_graph, sparsity_score, central_node
-from manca.perms import null_graph, perm_graph
+from manca.perms import rewire_graph, perm_graph
 from manca.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
@@ -53,10 +53,10 @@ min_clusters = 2
 max_clusters = 5
 iterations = 20
 central = True
-percentage = 10
+percentile = 10
 permutations = 100
-cluster = 'DBSCAN'
-mode = 'sparsity'
+cluster = 'KMeans'
+error = 0.1
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
 OTU_1	Bacteria	Cyanobacteria	Oxyphotobacteria	Synechoccales	Cyanobiaceae	Synechococcus	NA
@@ -84,6 +84,7 @@ class TestMain(unittest.TestCase):
         clustered_graph = clus_central(deepcopy(g))
         clusters = nx.get_node_attributes(clustered_graph, 'cluster')
         hubs = nx.get_edge_attributes(clustered_graph, 'hub')
+        self.assertGreater(len(hubs), 0)
 
     def test_center_manca(self):
         """
@@ -94,8 +95,7 @@ class TestMain(unittest.TestCase):
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         graph = results[0]
-        matrix = results[1][1]
-        central_edge(matrix, graph, percentage, permutations, iterations)
+        central_edge(graph, percentile, permutations, error)
         hubs = nx.get_edge_attributes(graph, 'hub')
         self.assertEqual(hubs[list(hubs.keys())[0]], 'negative hub')
 
@@ -106,8 +106,7 @@ class TestMain(unittest.TestCase):
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
         graph = results[0]
-        matrix = results[1][1]
-        central_edge(matrix, graph, percentage, permutations, iterations)
+        central_edge(graph, percentile, permutations, error)
         central_node(graph)
         self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
 
@@ -120,46 +119,43 @@ class TestMain(unittest.TestCase):
     def test_sparsity_score(self):
         """Checks whether correct sparsity scores are calculated.
         Because this network has 3 negative edges separating
-        2 clusters, the score should be -3. """
-        scoremat = diffuse_graph(g, limit, iterations)[0]
+        2 clusters, the score should be -3 + the penalty of 2000. """
+        scoremat = diffuse_graph(g, limit, iterations)
         clusters = KMeans(2).fit_predict(scoremat)
         adj_index = dict()
         for i in range(len(g.nodes)):
             adj_index[list(g.nodes)[i]] = i
         rev_index = {v: k for k, v in adj_index.items()}
         sparsity = sparsity_score(g, clusters, rev_index)
-        self.assertEqual(sparsity, -3)
+        self.assertEqual(sparsity, 1997)
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """
-        new_adj = diffuse_graph(g, iterations)
+        new_adj = diffuse_graph(g, iterations=iterations)
         self.assertNotEqual(np.mean(new_adj), 0)
 
-    def test_null_graph_equal(self):
+    def test_rewire_graph_equal(self):
         """Checks if a permuted graph with identical number of edges is generated. """
-        null = null_graph(g)
+        null = rewire_graph(g, error)
         self.assertEqual(len(null.edges), len(g.edges))
 
-    def test_null_graph_difference(self):
+    def test_rewire_graph_difference(self):
         """Checks if the resulting graph is permuted. """
-        null = null_graph(g)
+        null = rewire_graph(g, error)
         self.assertNotEqual(list(null.edges), list(g.edges))
 
     def test_bootstrap(self):
-        """Checks if p-values for the graph are returned. """
+        """Checks if reliability scores for the graph are returned. """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
-        weights = nx.get_edge_attributes(results[0], 'weight')
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
-        matrix = results[1][1]
-        posnodes = sum(weights[x] > 0 for x in weights)
-        ratio = posnodes / len(weights)
-        negthresh = np.percentile(matrix, percentage * (1 - ratio) / 2)
-        posthresh = np.percentile(matrix, 100 - percentage * ratio / 2)
-        neghubs = np.argwhere(matrix < negthresh)
-        poshubs = np.argwhere(matrix > posthresh)
-        bootmats = perm_graph(results[0], matrix, limit, iterations, permutations, posthresh, negthresh)
-        self.assertEqual(matrix.shape, bootmats.shape)
+        matrix = results[1]
+        negthresh = np.percentile(matrix, percentile)
+        posthresh = np.percentile(matrix, 100 - percentile)
+        neghubs = list(map(tuple, np.argwhere(matrix <= negthresh)))
+        poshubs = list(map(tuple, np.argwhere(matrix >= posthresh)))
+        bootmats = perm_graph(g, limit, permutations, percentile, poshubs, neghubs, error=0.1)
+        self.assertEqual(21, len(bootmats))
 
     def test_tax_weights(self):
         """Checks whether the tax weights for the edges are correctly calculated."""

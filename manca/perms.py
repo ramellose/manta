@@ -27,9 +27,7 @@ __license__ = 'Apache 2.0'
 import sys
 from random import choice
 import networkx as nx
-from copy import deepcopy
 import numpy as np
-from math import log
 
 
 def rewire_graph(graph, error):
@@ -44,8 +42,9 @@ def rewire_graph(graph, error):
     Because this does not take negative / positive hubs into account,
     the fraction of positive / negative weights per node
     is not preserved.
-    :param graph: Original graph.
-    :return: NetworkX graph
+    :param graph: Original graph to rewire.
+    :param error: Fraction of edges to rewire.
+    :return: Rewired NetworkX graph
     """
     model = graph.copy()
     swaps = len(model.nodes) * error
@@ -78,7 +77,7 @@ def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
     :param pos: List of edges in the upper percentile. (e.g. positive hubs)
     :param neg: List of edges in the lower percentile. (e.g. negative hubs)
     :param error: Fraction of edges to rewire for reliability metric.
-    :return: Matrix of p-values
+    :return: List of reliability scores.
     """
     perms = list()
     for i in range(permutations):
@@ -156,8 +155,8 @@ def diffusion(graph, iterations, limit=0.00001, norm=True):
     is calculated by taking the mean of the difference.
     :param graph: NetworkX graph of a microbial assocation network.
     :param iterations: Maximum number of iterations to carry out.
-    :param norm: Normalize values so they converge to -1 or 1.
     :param limit: Error limit for matrix convergence. Arbitrary if norm set to false.
+    :param norm: Normalize values so they converge to -1 or 1.
     :return: score matrix
     """
     scoremat = nx.to_numpy_matrix(graph)
