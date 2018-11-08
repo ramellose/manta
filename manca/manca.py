@@ -113,12 +113,10 @@ def main():
     try:
         if extension == 'graphml':
             network = nx.read_graphml(args['graph'])
-        elif extension == 'edgelist':
+        elif extension == 'txt':
             network = nx.read_weighted_edgelist(args['graph'])
         elif extension == 'gml':
             network = nx.read_gml(args['graph'])
-        elif extension == 'adj':
-            network = nx.read_multiline_adjlist(args['graph'])
         elif extension == 'cyjs':
             network = read_cyjson(args['graph'])
         else:

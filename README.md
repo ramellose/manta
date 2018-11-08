@@ -14,7 +14,9 @@ To install <i>manca</i>, run:
 pip install git+https://github.com/ramellose/manca.git
 ```
 
-To run the script, only two arguments are required:
+To run the script, only two arguments are required: input and output filepaths.
+The script recognizes gml, graphml and cyjs files. By default, cyjs is exported.
+It also accepts text files with edge lists, with the third column containing edge weight.
 ```
 manca -i filepath_to_input_network -o filepath_to_output_network
 ```
