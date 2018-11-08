@@ -31,12 +31,12 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
 import sys
-from manca.perms import perm_graph, diffuse_graph
+from manca.perms import perm_graph, diffuse_graph, diffusion
 from scipy.stats import binom_test
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
-                  mode='sparsity', cluster='DBSCAN'):
+                  cluster='DBSCAN'):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -67,8 +67,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    diffusion = diffuse_graph(graph, limit, iterations)
-    scoremat = diffusion[0]
+    scoremat = diffuse_graph(graph, limit, iterations)
     bestcluster = None
     randomclust = np.random.randint(2, size=len(adj))
     scores = list()
@@ -95,6 +94,11 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
             topscore = min_clusters
         bestcluster = KMeans(topscore).fit_predict(scoremat)
     elif cluster == 'DBSCAN':
+        # note: on the arctic soils test dataset,
+        # which represents an environmental gradient,
+        # the DBSCAN clustering does not work so well;
+        # we cannot use sparsity score as a criterion
+        # for optimal cluster number
         bestcluster = DBSCAN(min_samples=len(graph.nodes) / max_clusters).fit_predict(scoremat)
         score = sparsity_score(graph, bestcluster, rev_index)
         sys.stdout.write('Sparsity level of ' + str(len(set(bestcluster))) + ' clusters: ' + str(score) + '\n')
@@ -103,10 +107,10 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
-    return graph, diffusion
+    return graph, scoremat
 
 
-def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=20, limit=0.00001):
+def central_edge(graph, percentile, permutations, error):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
@@ -122,47 +126,44 @@ def central_edge(matrix, graph, percentage=10, permutations=10000, iterations=20
     ----------
     :param matrix: Outcome of flow process from cluster_graph.
     :param graph: NetworkX graph of a microbial association network.
-    :param iterations: The number of iterations carried out by the clustering algorithm.
-    :param percentage: Determines percentile of hub species to return.
+    :param percentile: Determines percentile of hub species to return.
     :param permutations: Number of permutations to carry out. If 0, no permutation test is done.
+    :param error: Fraction of edges to rewire for reliability metric.
+    :param iterations: The number of iterations carried out by the clustering algorithm.
     :return: Networkx graph with hub ID / p-value as node property.
     """
-    weights = nx.get_edge_attributes(graph, 'weight')
-    # calculates the ratio of positive / negative weights
-    # note that ratios need to be adapted, because the matrix is symmetric
-    posnodes = sum(weights[x] > 0 for x in weights)
-    ratio = posnodes / len(weights)
-    negthresh = np.percentile(matrix, percentage*(1-ratio)/2)
-    posthresh = np.percentile(matrix, 100-percentage*ratio/2)
-    neghubs = np.argwhere(matrix < negthresh)
-    poshubs = np.argwhere(matrix > posthresh)
+    scoremat = diffusion(graph, iterations=3, norm=False)[0]
+    negthresh = np.percentile(scoremat, percentile)
+    posthresh = np.percentile(scoremat, 100-percentile)
+    neghubs = list(map(tuple, np.argwhere(scoremat < negthresh)))
+    poshubs = list(map(tuple, np.argwhere(scoremat > posthresh)))
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
     if permutations > 0:
-        pvals = perm_graph(graph, matrix, limit=limit, iterations=iterations,
-                           permutations=permutations, posthresh=posthresh, negthresh=negthresh)
+        score = perm_graph(graph, scoremat, percentile=percentile, permutations=permutations,
+                           pos=poshubs, neg=neghubs, error=error)
     # need to make sure graph is undirected
     graph = nx.to_undirected(graph)
     # initialize empty dictionary to store edge ID
     edge_vals = dict()
-    edge_pvals = dict()
+    edge_scores = dict()
     # need to convert matrix index to node ID
     for edge in neghubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'negative hub'
         if permutations > 0:
-            edge_pvals[(node1, node2)] = pvals[adj_index[node1], adj_index[node2]]
+            edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
     for edge in poshubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'positive hub'
         if permutations > 0:
-            edge_pvals[(node1, node2)] = pvals[adj_index[node1], adj_index[node2]]
+            edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
     nx.set_edge_attributes(graph, values=edge_vals, name='hub')
     if permutations > 0:
-        nx.set_edge_attributes(graph, values=edge_pvals, name='hub p-value')
+        nx.set_edge_attributes(graph, values=edge_scores, name='reliability score')
 
 
 def central_node(graph):
@@ -210,6 +211,12 @@ def sparsity_score(graph, clusters, rev_index):
     Cuts through positively-weighted edges are penalized,
     whereas cuts through negatively-weighted edges are rewarded.
     The lowest sparsity score represents the best clustering.
+    Because this sparsity score rewards cluster assignments
+    that separate out negative hubs,
+    the score is penalized for cluster number;
+    this penalty ensures that nodes with some intra-cluster
+    negative edges are still assigned to clusters where
+    they predominantly co-occur with other cluster members.
     :param graph: NetworkX weighted, undirected graph
     :param clusters: List of cluster identities
     :param rev_index: Index matching node ID to matrix index
@@ -242,4 +249,11 @@ def sparsity_score(graph, clusters, rev_index):
             sparsity += 1
         else:
             sparsity -= 1
+    # the applied penalty is the inverse of the total node number
+    # multiplied by a scaling factor (for now, set to 10000)
+    # this is multiplied by the cluster number
+    # therefore, smaller networks are punished more harshly for more clusters
+    # than larger networks
+    penalty = (1/len(clusters))*10000*len(set(clusters))
+    sparsity += penalty
     return sparsity

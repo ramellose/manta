@@ -69,8 +69,8 @@ def generate_layout(graph, tax=None):
             # need to scale coordinate system and transpose
             # spring_layout coordinates are placed in box of size[0,1]
             # transpose them vertically to box of size[0, 1*number of clusters]
-            subcoords[node][0] = subcoords[node][0] * (len(clustgraph.nodes) / total_nodes)
-            subcoords[node][1] = subcoords[node][1] * (len(clustgraph.nodes) / total_nodes)
+            subcoords[node][0] = subcoords[node][0] * (len(clustgraph.nodes) / total_nodes) * 10
+            subcoords[node][1] = subcoords[node][1] * (len(clustgraph.nodes) / total_nodes) * 10
             subcoords[node][1] += len(num_clusters)
         coord_list.append(subcoords)
     angles = 360 / len(num_clusters)

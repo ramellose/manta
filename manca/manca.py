@@ -79,10 +79,12 @@ def set_manca():
                              'these node properties are used instead. ',
                         default=None)
     parser.set_defaults(layout=False)
-    parser.add_argument('-p', '--percentage',
+    parser.add_argument('-p', '--percentile',
                         dest='p', type=int,
                         required=False,
-                        help='Percentage of central edges to return. ',
+                        help='Percentile of central edges to return. For example, '
+                             ' a percentile of 10 returns edges below the 10th and '
+                             'edges above the 90th percentile. ',
                         default=10)
     parser.add_argument('-perm', '--permutation',
                         dest='perm', type=int,
@@ -94,7 +96,12 @@ def set_manca():
                         choices=['KMeans', 'DBSCAN'],
                         required=False,
                         help='Choice for clustering algorithm. ',
-                        default='DBSCAN')
+                        default='KMeans')
+    parser.add_argument('-e', '--error',
+                        dest='error', type=int,
+                        required=False,
+                        help='Fraction of edges to rewire for reliability tests. ',
+                        default=0.1)
     return parser
 
 
@@ -126,8 +133,8 @@ def main():
     network = nx.to_undirected(network)
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
-                             central=args['central'], percentage=args['p'], permutations=args['perm'],
-                             cluster=args['cluster'])
+                             central=args['central'], percentile=args['p'], permutations=args['perm'],
+                             cluster=args['cluster'], error=args['error'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -146,7 +153,7 @@ def main():
 
 
 def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,
-                 central=True, percentage=10, permutations=100, cluster='DBSCAN'):
+                 central=True, percentile=10, permutations=100, cluster='DBSCAN', error=0.1):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -155,7 +162,7 @@ def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iteration
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param central: If True, centrality values are calculated.
-    :param percentage: Determines percentile thresholds.
+    :param percentile: Determines percentile thresholds.
     :param permutations: Number of permutations.
     :param mode: Criterion for evaluating clusters.
     :param cluster: Algorithm for clustering of diffusion matrix.
@@ -165,10 +172,10 @@ def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iteration
                             min_clusters=min_clusters, iterations=iterations,
                             cluster=cluster)
     graph = results[0]
-    matrix = results[1][1]
+    matrix = results[1]
     if central:
-        central_edge(matrix, graph, limit=limit, iterations=iterations,
-                     percentage=percentage, permutations=permutations)
+        central_edge(matrix, graph, limit=limit, percentile=percentile,
+                     permutations=permutations, error=error)
         central_node(graph)
     return graph
 

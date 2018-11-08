@@ -32,7 +32,7 @@ import numpy as np
 from math import log
 
 
-def null_graph(graph):
+def rewire_graph(graph, error):
     """
     Returns a rewired copy of the original graph.
     The rewiring procedure preserves degree of each node.
@@ -48,7 +48,7 @@ def null_graph(graph):
     :return: NetworkX graph
     """
     model = graph.copy()
-    swaps = len(model.nodes) ** 2
+    swaps = len(model.nodes) * error
     nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
     model = nx.to_undirected(model)
     edge_weights = list()
@@ -61,61 +61,88 @@ def null_graph(graph):
     return model
 
 
-def perm_test(matrix, permutations, posthresh, negthresh):
+def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
     """
-    Returns the p-values of the permutation procedure to test edge centrality scores.
-    These p-values are generated from a 1-sided t-test;
-    this test determines whether an edge centrality score
-    is larger or smaller than the thresholds based on permutation testing.
-    :param matrix: Matrix generated with diffuse_graph
-    :param permutations: Permuted diffuse_graph matrices
-    :param posthresh: Positive threshold for edges
-    :param negthresh: Negative threshold for edges
-    :return: Matrix of p-values
-    """
-    possums = list()
-    negsums = list()
-    for perm in permutations:
-        tpos = perm - posthresh  # thresholds are different for positive / negative hubs
-        tneg = perm - negthresh
-        possums.append(tpos)
-        negsums.append(tneg)
-    # p value equals number of permutations that exceeds / is smaller than matrix values
-    t = deepcopy(tpos)
-    for i in range(np.shape(matrix)[0]):
-        for j in range(np.shape(matrix)[1]):
-            if matrix[i,j] > 0:
-                t[i,j] = sum(perm[i,j] > matrix[i,j] for perm in possums)/len(possums)
-            elif matrix[i, j] < 0:
-                t[i,j] = sum(perm[i,j] < matrix[i,j] for perm in negsums)/len(possums)
-            else:
-                t[i,j] = 1
-    return t
-
-def perm_graph(graph, matrix, limit, iterations, permutations, posthresh, negthresh):
-    """
-    Calls the null_graph function and returns the p-values of the permutation procedure.
-    Each score is considered an individual statistic in this case.
+    Calls the rewire_graph function;
+    returns reliability scores of edge centrality scores.
+    Scores close to 100 imply that the scores are robust to perturbation.
+    Reliability scores as proposed by:
+    Frantz, T. L., & Carley, K. M. (2017).
+    Reporting a network’s most-central actor with a confidence level.
+    Computational and Mathematical Organization Theory, 23(2), 301-312.
     :param graph: NetworkX graph of a microbial association network.
     :param matrix: Outcome of diffusion process from cluster_graph.
     :param limit: Error limit for matrix convergence.
     :param permutations: Number of permutations to carry out. If 0, no bootstrapping is done.
-    :param posthresh: Positive threshold for edges
-    :param negthresh: Negative threshold for edges
+    :param percentile: Determines percentile of hub species to return.
+    :param pos: List of edges in the upper percentile. (e.g. positive hubs)
+    :param neg: List of edges in the lower percentile. (e.g. negative hubs)
+    :param error: Fraction of edges to rewire for reliability metric.
     :return: Matrix of p-values
     """
     perms = list()
     for i in range(permutations):
-        permutation = null_graph(graph)
-        adj = diffuse_graph(permutation, limit, iterations)[1]
+        permutation = rewire_graph(graph, error)
+        adj = diffusion(graph=permutation, iterations=3, norm=False)[0]
         perms.append(adj)
         sys.stdout.write('Permutation iteration ' + str(i) + '\n')
         sys.stdout.flush()
-    central_pvals = perm_test(matrix, perms, posthresh, negthresh)
-    return central_pvals
+    posmatches = dict()
+    negmatches = dict()
+    for hub in pos:
+        posmatches[hub] = 0
+    for hub in neg:
+        negmatches[hub] = 0
+    for perm in perms:
+        negthresh = np.percentile(perm, percentile)
+        posthresh = np.percentile(perm, 100 - percentile)
+        permneg = list(map(tuple, np.argwhere(perm < negthresh)))
+        permpos = list(map(tuple, np.argwhere(perm > posthresh)))
+        matches = set(pos).intersection(permpos)
+        for match in matches:
+            posmatches[match] += 1
+        matches = set(neg).intersection(permneg)
+        for match in matches:
+            negmatches[match] += 1
+    reliability = posmatches.copy()
+    reliability.update(negmatches)
+    reliability = {k: (v/permutations) for k,v in reliability.items()}
+    # p value equals number of permutations that exceeds / is smaller than matrix values
+    return reliability
 
 
 def diffuse_graph(graph, limit=0.00001, iterations=50):
+    """
+    Wrapper for the diffusion process.
+    If the diffusion algorithm fails to converge,
+    it retries with a lower error setting.
+    :param graph: NetworkX graph of a microbial assocation network.
+    :param limit: Error limit for matrix convergence.
+    :param iterations: Maximum number of iterations to carry out.
+    :return: score matrix
+    """
+    limits = [0.00001, 0.0001, 0.001, 0.01, 0.1]
+    convergence = False
+    i = next(x[0] for x in enumerate(limits) if x[1] > limit)
+    start = True
+    # finds nearest value in limits that is larger than specified limit
+    while not convergence and i < len(limits):
+        if start:
+            result = diffusion(graph, limit, iterations)
+            start = False
+        else:
+            result = diffusion(graph, limits[i], iterations)
+        convergence = result[1]
+        scoremat = result[0]
+        i += 1
+    if i == len(limits):
+        sys.stdout.write('Warning: no convergence possible.' + '\n' +
+                         'Results are unlikely to be reliable. ' + '\n')
+        sys.stdout.flush()
+    return scoremat
+
+
+def diffusion(graph, iterations, norm=True, limit=0.00001):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
@@ -128,23 +155,27 @@ def diffuse_graph(graph, limit=0.00001, iterations=50):
     cumulative error, relative to the previous iteration,
     is calculated by taking the mean of the difference.
     :param graph: NetworkX graph of a microbial assocation network.
-    :param limit: Error limit for matrix convergence.
     :param iterations: Maximum number of iterations to carry out.
-    :return:
+    :param norm: Normalize values so they converge to -1 or 1.
+    :param limit: Error limit for matrix convergence. Arbitrary if norm set to false.
+    :return: score matrix
     """
     scoremat = nx.to_numpy_matrix(graph)
-    flowmat = scoremat.copy()
     # if the 'weight' property of the graph is set correctly
     # weight in the adj graph should equal this
     error = 1
     prev_error = 0
     iters = 0
+    convergence = True
     while error > limit and iters < iterations:
         updated_mat = np.linalg.matrix_power(scoremat, 2)
+        #updated_mat = deepcopy(scoremat)
+        #for entry in np.nditer(updated_mat, op_flags=['readwrite']):
+           # entry[...] = entry ** 2
         # expansion step
         # squaring the matrix without normalisation
-        # is equal to a a Galton-Watson branching process
-        updated_mat = updated_mat / abs(np.max(updated_mat))
+        if norm:
+            updated_mat = updated_mat / abs(np.max(updated_mat))
         # the flow matrix describes flow and is output to compute centralities
         # in the MCL implementation, the rows are normalized to sum to 1
         # this creates a column stochastic matrix
@@ -156,20 +187,18 @@ def diffuse_graph(graph, limit=0.00001, iterations=50):
         for value in np.nditer(updated_mat, op_flags=['readwrite']):
             if value != 0:
                 value[...] = value + (1 / value)
-        updated_mat = updated_mat / abs(np.max(updated_mat))
+        if norm:
+            updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(np.mean(updated_mat - scoremat))
-        sys.stdout.write('Current error: ' + str(error) + '\n')
-        sys.stdout.flush()
+        if norm:
+            sys.stdout.write('Current error: ' + str(error) + '\n')
+            sys.stdout.flush()
         scoremat = updated_mat
         iters += 1
-    if iters == iterations:
-        sys.stdout.write('Warning: algorithm did not converge.' + '\n')
+    if iters == iterations and norm:
+        sys.stdout.write('Warning: algorithm did not converge.' + '\n' +
+                         'Retrying with higher error limit. ' + '\n')
         sys.stdout.flush()
-    for i in range(iters):
-        flowmat = np.linalg.matrix_power(flowmat, 2)
-        # expansion step
-        # squaring the matrix without normalisation
-        # is equal to a a Galton-Watson branching process
-        flowmat = flowmat / abs(np.max(flowmat))
-    return scoremat, flowmat
+        convergence = False
+    return scoremat, convergence
 
