@@ -174,7 +174,7 @@ def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iteration
     graph = results[0]
     matrix = results[1]
     if central:
-        central_edge(matrix, graph, limit=limit, percentile=percentile,
+        central_edge(graph, percentile=percentile,
                      permutations=permutations, error=error)
         central_node(graph)
     return graph

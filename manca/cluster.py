@@ -129,14 +129,13 @@ def central_edge(graph, percentile, permutations, error):
     :param percentile: Determines percentile of hub species to return.
     :param permutations: Number of permutations to carry out. If 0, no permutation test is done.
     :param error: Fraction of edges to rewire for reliability metric.
-    :param iterations: The number of iterations carried out by the clustering algorithm.
     :return: Networkx graph with hub ID / p-value as node property.
     """
     scoremat = diffusion(graph, iterations=3, norm=False)[0]
     negthresh = np.percentile(scoremat, percentile)
     posthresh = np.percentile(scoremat, 100-percentile)
-    neghubs = list(map(tuple, np.argwhere(scoremat < negthresh)))
-    poshubs = list(map(tuple, np.argwhere(scoremat > posthresh)))
+    neghubs = list(map(tuple, np.argwhere(scoremat <= negthresh)))
+    poshubs = list(map(tuple, np.argwhere(scoremat >= posthresh)))
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i

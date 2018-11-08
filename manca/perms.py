@@ -96,8 +96,8 @@ def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
     for perm in perms:
         negthresh = np.percentile(perm, percentile)
         posthresh = np.percentile(perm, 100 - percentile)
-        permneg = list(map(tuple, np.argwhere(perm < negthresh)))
-        permpos = list(map(tuple, np.argwhere(perm > posthresh)))
+        permneg = list(map(tuple, np.argwhere(perm <= negthresh)))
+        permpos = list(map(tuple, np.argwhere(perm >= posthresh)))
         matches = set(pos).intersection(permpos)
         for match in matches:
             posmatches[match] += 1
@@ -128,7 +128,7 @@ def diffuse_graph(graph, limit=0.00001, iterations=50):
     # finds nearest value in limits that is larger than specified limit
     while not convergence and i < len(limits):
         if start:
-            result = diffusion(graph, limit, iterations)
+            result = diffusion(graph=graph, limit=limit, iterations=iterations)
             start = False
         else:
             result = diffusion(graph, limits[i], iterations)
@@ -142,7 +142,7 @@ def diffuse_graph(graph, limit=0.00001, iterations=50):
     return scoremat
 
 
-def diffusion(graph, iterations, norm=True, limit=0.00001):
+def diffusion(graph, iterations, limit=0.00001, norm=True):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
