@@ -21,7 +21,7 @@ from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 
 
-def set_manca():
+def set_manta():
     """This parser gets input settings for running the manta clustering algorithm.
     Apart from the parameters specified by cluster_graph,
     it requires an input format that can be read by networkx."""
@@ -106,7 +106,7 @@ def set_manca():
 
 
 def main():
-    args = set_manca().parse_args(sys.argv[1:])
+    args = set_manta().parse_args(sys.argv[1:])
     args = vars(args)
     filename = args['graph'].split(sep=".")
     extension = filename[len(filename)-1]
