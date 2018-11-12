@@ -1,4 +1,4 @@
-# manca
+# manta
 
 Microbial association network clustering algorithm. Version 0.1.0.
 
