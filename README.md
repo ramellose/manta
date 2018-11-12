@@ -9,28 +9,28 @@ This version is still in early alpha and has been tested for Python 3.6.
 
 ## Getting Started
 
-To install <i>manca</i>, run:
+To install <i>manta</i>, run:
 ```
-pip install git+https://github.com/ramellose/manca.git
+pip install git+https://github.com/ramellose/manta.git
 ```
 
 To run the script, only two arguments are required: input and output filepaths.
 The script recognizes gml, graphml and cyjs files. By default, cyjs is exported.
 It also accepts text files with edge lists, with the third column containing edge weight.
 ```
-manca -i filepath_to_input_network -o filepath_to_output_network
+manta -i filepath_to_input_network -o filepath_to_output_network
 ```
 
 To generate a taxonomically-informed layout and centrality scores, add some flags:
 ```
-manca -i filepath_to_input_network -o filepath_to_output_network -f cyjs --layout --central -tax filepath_to_tax_table
+manta -i filepath_to_input_network -o filepath_to_output_network -f cyjs --layout --central -tax filepath_to_tax_table
 ```
 
 Layouts can only be generated for .cyjs network files, which are selected with the flag -f cyjs.
 
 For a complete explanation of all the parameters, run:
 ```
-manca -h
+manta -h
 ```
 
 ### Contributions
