@@ -195,7 +195,7 @@ def central_node(graph):
                           (len(edges)/len(graph.edges)), alternative='greater')
         if pval < 0.05:
             sighubs[node] = 'hub'
-            pvals[node] = pval
+            pvals[node] = float(pval)
     nx.set_node_attributes(graph, values=sighubs, name='hub')
     nx.set_node_attributes(graph, values=pvals, name='hub p-value')
 
