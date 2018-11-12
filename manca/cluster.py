@@ -83,7 +83,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
             sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
             sys.stdout.flush()
             scores.append(score)
-        topscore = int(np.argmin(scores)) + min_clusters - 1
+        topscore = int(np.argmin(scores)) + min_clusters
         if topscore >= min_clusters:
             sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
             sys.stdout.flush()
@@ -219,6 +219,12 @@ def sparsity_score(graph, clusters, rev_index):
     :param rev_index: Index matching node ID to matrix index
     :return: Sparsity score
     """
+    # set up scale for positive + negative edges
+    # if all negative edges are cut, the sparsity score should be -1
+    # if all positive edges are cut, the sparsity score should be +1
+    weights = nx.get_edge_attributes(graph, 'weight')
+    neg_score = 1 / (sum(value < 0 for value in weights.values()))
+    pos_score = 1 / (sum(value >= 0 for value in weights.values()))
     sparsity = 0
     edges = list()
     for cluster_id in set(clusters):
@@ -231,7 +237,7 @@ def sparsity_score(graph, clusters, rev_index):
         weights = nx.get_edge_attributes(cluster, 'weight')
         for x in weights:
             if weights[x] < 0:
-                sparsity += 1
+                sparsity += neg_score
     all_edges = list(graph.edges)
     cuts = list()
     for edge in all_edges:
@@ -243,9 +249,9 @@ def sparsity_score(graph, clusters, rev_index):
         # otherwise subtract 1
         cut = graph[edge[0]][edge[1]]['weight']
         if cut > 0:
-            sparsity += 1
+            sparsity += pos_score
         else:
-            sparsity -= 1
+            sparsity -= neg_score
     # the applied penalty is the inverse of the total node number
     # multiplied by a scaling factor (for now, set to 10000)
     # this is multiplied by the cluster number
