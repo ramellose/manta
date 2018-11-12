@@ -1,17 +1,17 @@
 from setuptools import setup
 
-setup(name='manca',
+setup(name='manta',
       version='0.1.0',
-      packages=['manca'],
+      packages=['manta'],
       description='Microbial association network clustering',
       author='Lisa Röttjers',
       author_email='lisa.rottjers@kuleuven.be',
-      url='https://github.com/ramellose/manca',
+      url='https://github.com/ramellose/manta',
       license='Apache-2.0',
       summary='Clustering and centrality algorithms for weighted and undirected networks.',
       entry_points={
           'console_scripts': [
-              'manca = manca.manca:main'
+              'manta = manta.manta:main'
           ]
       },
       )

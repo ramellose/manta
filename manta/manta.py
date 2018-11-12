@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-manca: microbial association network clustering toolbox.
+manta: microbial association network clustering toolbox.
 The script takes a weighted and undirected network as input
 and uses this to generate network clusters and calculate network centrality.
 Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
@@ -16,13 +16,13 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import sys
 import argparse
-from manca.cluster import cluster_graph, central_edge, central_node
-from manca.cyjson import write_cyjson, read_cyjson
-from manca.layout import generate_layout
+from manta.cluster import cluster_graph, central_edge, central_node
+from manta.cyjson import write_cyjson, read_cyjson
+from manta.layout import generate_layout
 
 
 def set_manca():
-    """This parser gets input settings for running the manca clustering algorithm.
+    """This parser gets input settings for running the manta clustering algorithm.
     Apart from the parameters specified by cluster_graph,
     it requires an input format that can be read by networkx."""
     parser = argparse.ArgumentParser(

@@ -31,7 +31,7 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
 import sys
-from manca.perms import perm_graph, diffuse_graph, diffusion
+from manta.perms import perm_graph, diffuse_graph, diffusion
 from scipy.stats import binom_test
 
 

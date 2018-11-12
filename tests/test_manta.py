@@ -10,10 +10,10 @@ __license__ = 'Apache 2.0'
 
 import unittest
 import networkx as nx
-from manca.manca import clus_central
-from manca.cluster import central_edge, cluster_graph, diffuse_graph, sparsity_score, central_node
-from manca.perms import rewire_graph, perm_graph
-from manca.layout import generate_layout, generate_tax_weights
+from manta.manta import clus_central
+from manta.cluster import central_edge, cluster_graph, diffuse_graph, sparsity_score, central_node
+from manta.perms import rewire_graph, perm_graph
+from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
 from io import StringIO
