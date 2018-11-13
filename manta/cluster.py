@@ -83,7 +83,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
             sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
             sys.stdout.flush()
             scores.append(score)
-        topscore = int(np.argmin(scores)) + min_clusters
+        topscore = int(np.argmin(scores)) + min_clusters - 1
         if topscore >= min_clusters:
             sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
             sys.stdout.flush()
@@ -257,6 +257,4 @@ def sparsity_score(graph, clusters, rev_index):
     # this is multiplied by the cluster number
     # therefore, smaller networks are punished more harshly for more clusters
     # than larger networks
-    penalty = (1/len(clusters))*10000*len(set(clusters))
-    sparsity += penalty
     return sparsity
