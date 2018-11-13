@@ -50,7 +50,7 @@ def set_manta():
                         help='The error limit specifies how similar iterations '
                              'of Markov clustering must be before the algorithm '
                              'is considered to have reached convergence.  ',
-                        default=0.0001)
+                        default=0.0005)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
@@ -148,6 +148,7 @@ def main():
         write_cyjson(graph=clustered, filename=args['fp'], layout=layout)
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
+    exit(0)
 
 
 def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,

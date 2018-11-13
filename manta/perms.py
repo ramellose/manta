@@ -195,7 +195,12 @@ def diffusion(graph, iterations, limit=0.00001, norm=True):
                 # we need above-0 values to converge to -1, and the rest to 1
                 # previous: value * abs(value)
                 # this inflation does not result in desired sparsity
-                value[...] = value + (1/value)
+                try:
+                    value[...] = value + (1/value)
+                except RuntimeWarning:
+                    sys.stdout.write('Warning: matrix overflow detected.' + '\n' +
+                                     'Please retry with a higher error limit. ' + '\n')
+                    exit(1)
         if norm:
             updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(np.mean(updated_mat - scoremat))

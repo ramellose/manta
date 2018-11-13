@@ -252,9 +252,4 @@ def sparsity_score(graph, clusters, rev_index):
             sparsity += pos_score
         else:
             sparsity -= neg_score
-    # the applied penalty is the inverse of the total node number
-    # multiplied by a scaling factor (for now, set to 10000)
-    # this is multiplied by the cluster number
-    # therefore, smaller networks are punished more harshly for more clusters
-    # than larger networks
     return sparsity
