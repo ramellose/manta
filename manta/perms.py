@@ -159,7 +159,20 @@ def diffusion(graph, iterations, limit=0.00001, norm=True):
     :param norm: Normalize values so they converge to -1 or 1.
     :return: score matrix
     """
-    scoremat = nx.to_numpy_matrix(graph)
+    scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
+    # extract the maximum and minimum value
+    # if either value has decimals, matrix is rescaled from 1 to 10
+    if not (np.max(scoremat)).is_integer() or not (np.min(scoremat)).is_integer():
+        negmin = np.max(scoremat[scoremat < 0])
+        negmax = np.min(scoremat[scoremat < 0])
+        posmax = np.max(scoremat[scoremat > 0])
+        posmin = np.min(scoremat[scoremat > 0])
+        for row in scoremat:
+            for j, entry in enumerate(row):
+                if entry > 0:
+                    row[j] = 9 * (entry - posmin)/(posmax-posmin) + 1
+                elif entry < 0:
+                    row[j] = -9 * (entry - negmin)/(negmax-negmin) - 1
     # if the 'weight' property of the graph is set correctly
     # weight in the adj graph should equal this
     error = 1
@@ -174,7 +187,16 @@ def diffusion(graph, iterations, limit=0.00001, norm=True):
         # expansion step
         # squaring the matrix without normalisation
         if norm:
-            updated_mat = updated_mat / abs(np.max(updated_mat))
+            # negative values should be scaled separately
+            # if there are far higher positive values,
+            # negative values can disappear
+            # old: updated_mat = updated_mat / abs(np.max(updated_mat))
+            updated_mat[updated_mat > 0] = \
+                updated_mat[updated_mat > 0] / \
+                abs(np.max(updated_mat[updated_mat > 0]))
+            updated_mat[updated_mat < 0] = \
+                updated_mat[updated_mat < 0] / \
+                abs(np.min(updated_mat[updated_mat < 0]))
         # the flow matrix describes flow and is output to compute centralities
         # in the MCL implementation, the rows are normalized to sum to 1
         # this creates a column stochastic matrix
@@ -187,7 +209,12 @@ def diffusion(graph, iterations, limit=0.00001, norm=True):
             if value != 0:
                 value[...] = value + (1 / value)
         if norm:
-            updated_mat = updated_mat / abs(np.max(updated_mat))
+            updated_mat[updated_mat > 0] = \
+                updated_mat[updated_mat > 0] / \
+                abs(np.max(updated_mat[updated_mat > 0]))
+            updated_mat[updated_mat < 0] = \
+                updated_mat[updated_mat < 0] / \
+                abs(np.min(updated_mat[updated_mat < 0]))
         error = abs(np.mean(updated_mat - scoremat))
         if norm:
             sys.stdout.write('Current error: ' + str(error) + '\n')
