@@ -29,10 +29,11 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-from sklearn.cluster import DBSCAN, KMeans
+from sklearn.cluster import KMeans
 import sys
 from manta.perms import perm_graph, diffusion
 from scipy.stats import binom_test
+from random import sample
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
@@ -65,18 +66,22 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
+    scoremat, memory, startmat = diffusion(graph=graph, limit=limit, iterations=iterations)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
     if not memory:
-        bestcluster = cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster=cluster)
+        bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
+                                   max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     if memory:
-        bestcluster = cluster_fuzzy(graph, rev_index, diffs, max_clusters, min_clusters, cluster=cluster)
+        bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
+                                    startmat=startmat, scoremat=scoremat, limit=limit,
+                                    iterations=iterations, max_clusters=max_clusters,
+                                    min_clusters=min_clusters, cluster=cluster)
     clusdict = dict()
     for i in range(len(graph.nodes)):
-        clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
+        clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
     return graph, scoremat
 
@@ -227,82 +232,75 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_fuzzy(graph, rev_index, diffs, max_clusters, min_clusters, cluster='KMeans'):
+def cluster_fuzzy(graph, startmat, scoremat, adj_index, rev_index, limit, iterations,
+                  max_clusters, min_clusters, cluster='KMeans'):
     """
     If a memory effect is demonstrated to exist during
     matrix diffusion, the fuzzy clustering algorithm assigns
     cluster identity based on multiple diffusion steps.
     :param graph: NetworkX weighted, undirected graph
+    :param adj_index: Index matching matrix index to node ID
     :param rev_index: Index matching node ID to matrix index
-    :param scores: List of cluster sparsity scores
-    :param diffs: List of diffusion matrices
+    :param limit: Error limit for diffusion
+    :param iterations: Maximum number of iterations
+    :param startmat: Initial diffusion matrix
+    :param scoremat: Diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
     :param cluster: Clustering method (only KMeans supported for now)
     :return: Vector with cluster assignments
     """
-    difscores = list()
-    topscores = list()
-    for j in range(len(diffs)):
-        scoremat = diffs[j]
-        scores = list()
-        if cluster == 'KMeans':
-            for i in range(min_clusters, max_clusters + 1):
-                clusters = KMeans(i).fit_predict(scoremat)
-                score = sparsity_score(graph, clusters, rev_index)
-                scores.append(score)
-            topscore = int(np.argmin(scores)) + min_clusters
-            sys.stdout.write('Iteration ' + str(j) +
-                             ': lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
-            sys.stdout.flush()
-        difscores.append(scores[np.argmin(scores)])
-        topscores.append(topscore)
-    separating_iters = np.where(np.array(difscores) < -0.5)[0]
-    # the -0.5 is an arbitrary quality threshold
-    sys.stdout.write('Using the following iterations for fuzzy clustering: ' + str(separating_iters) + '\n')
-    sys.stdout.flush()
-    # these iterations are able to separate the cluster relatively well
-    # can be used to identify fuzzy clusters
-    topscore = topscores[separating_iters[-1]]
-    centroids = list()
-    sep_clusters = list()
-    # we should skip the first iteration
-    # the centroids of this iteration are very close
-    # to centers of outlier clusters in following iterations
-    for j in separating_iters[1:]:
-        scoremat = diffs[j]
-        if cluster == 'KMeans':
-            sep_clusters.append(KMeans(topscores[j]).fit_predict(scoremat))
-            clusters = KMeans(topscores[j]).fit(scoremat)
-            centroids.append(clusters.cluster_centers_)
-    # once we have the centroids, we need to map clusters to eachother
-    # e.g.: cluster 1 from iter 1 may look more like cluster 4 from iter 2
-    clusdict = dict.fromkeys(list(range(topscore)))
-    for key in clusdict:
-        clusdict[key] = dict.fromkeys(list(range(len(centroids)-1)))
-        for val in clusdict[key]:
-            clusdict[key][val] = list()
-    core_centers = centroids[-1]
-    for j in range(0, len(centroids)-1):
-        iter_centers = centroids[j]
-        # closest centroid is the mean value closest to 0
-        for m in range(len(iter_centers)):
-            iter = iter_centers[m]
+    # clustering on the 1st iteration already yields reasonable results
+    # however, we can't separate nodes that are 'intermediates' between clusters
+    # solution: permute matrix slightly, repeat clustering
+    bestcluster = np.array(cluster_hard(graph, rev_index, startmat, max_clusters,
+                                        min_clusters, cluster='KMeans'), dtype=object)
+    centroids = KMeans(len(set(bestcluster))).fit(startmat)
+    centroids = centroids.cluster_centers_
+    countmat = np.zeros(shape=len(bestcluster))
+    clusprobs = np.zeros(shape=len(bestcluster))
+    for i in range(1000):
+        # half of the nodes are subselected, clustering is repeated
+        nodes = sample(list(graph.nodes), (len(graph.nodes)//3)*2)
+        subgraph = graph.subgraph(nodes)
+        perm_index = dict()
+        for k in range(len(subgraph.nodes)):
+            perm_index[list(subgraph.nodes)[k]] = k
+        perm_rev = {v: k for k, v in perm_index.items()}
+        set_indices = set(adj_index.keys()).intersection(set(perm_rev.values()))
+        set_indices = {k: adj_index[k] for k in set_indices}
+        # get indices of values in permuted graph to subselect centroids and cluster
+        subcentroids = [sub[list(set_indices.values())] for sub in centroids]
+        permat, memory, permstat = diffusion(graph=subgraph, limit=limit, iterations=1)
+        permcluster = KMeans(len(set(bestcluster))).fit_predict(permstat)
+        permcentroids = KMeans(len(set(bestcluster))).fit(permstat)
+        permcentroids = permcentroids.cluster_centers_
+        clusdict = dict.fromkeys(list(range(len(set(bestcluster)))))
+        for j in range(len(permcentroids)):
+            # closest centroid is the mean value closest to 0
+            perm = permcentroids[j]
             diff = list()
-            for n in range(len(core_centers)):
-                diff.append(abs(np.mean(iter-core_centers[n])))
-            clusdict[(diff.index(min(diff)))][j].append(m)
-    # with the centroid mapping from before,
-    # we can see if taxa move to different centroids
-    clusprobs = np.zeros(len(sep_clusters[-1]))
-    for i in range(0, len(sep_clusters[-1])):
-        for j in range(0, len(sep_clusters) - 1):
-            if sep_clusters[j][i] in clusdict[sep_clusters[-1][i]][j]:
-                clusprobs[i] += 1/(len(sep_clusters)-1)
-    bestcluster = sep_clusters[-1]
+            for m in range(len(subcentroids)):
+                centroid = subcentroids[m]
+                diff.append(abs(np.mean(centroid - perm)))
+            clusdict[(diff.index(min(diff)))] = j
+        # with the centroid mapping from before,
+        # we can see if taxa move to different centroids
+        print(clusdict)
+        for taxon in perm_index:
+            index = adj_index[taxon]
+            countmat[index] += 1
+            if bestcluster[index] != permcluster[perm_index[taxon]] and bestcluster[index] != None:
+                # if the clusters are not the same, 1 is added to the prob value
+                clusprobs[index] += 1
+        # where nodes change cluster assignment >50% of the time,
+        # the cluster assigned is 'fuzzy'
+        sys.stdout.write('Fuzzy iteration: ' + str(i) + '\n')
+        sys.stdout.flush()
+    clusprobs = clusprobs / countmat
+    bestcluster[clusprobs > 0.5] = clusprobs[clusprobs > 0.5]
     # where nodes change cluster assignment >50% of the time,
     # the cluster assigned is 'fuzzy'
-    bestcluster[np.where(clusprobs < 0.5)] = 100
     return bestcluster
 
 

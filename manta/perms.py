@@ -110,7 +110,7 @@ def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
     return reliability
 
 
-def diffusion(graph, iterations, limit=2, norm=True):
+def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
@@ -122,16 +122,16 @@ def diffusion(graph, iterations, limit=2, norm=True):
     Subsequently, the matrix is scaled. The
     cumulative error, relative to the previous iteration,
     is calculated by taking the mean of the difference.
-    :param graph: NetworkX graph of a microbial assocation network.
-    :param iterations: Maximum number of iterations to carry out.
-    :param limit: Percentage in error decrease until matrix is considered converged.
-    :param norm: Normalize values so they converge to -1 or 1.
-    :return: score matrix
+    :param graph: NetworkX graph of a microbial assocation network
+    :param iterations: Maximum number of iterations to carry out
+    :param limit: Percentage in error decrease until matrix is considered converged
+    :param norm: Normalize values so they converge to -1 or 1
+    :param msg: If true, print error size per iteration
+    :return: score matrix, memory effect, initial diffusion matrix
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
     error = 100
     iters = 0
-    old_iters = list()
     memory = False
     error_1 = 1  # error steps 1 and 2 iterations back
     error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
@@ -174,10 +174,9 @@ def diffusion(graph, iterations, limit=2, norm=True):
             updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(updated_mat - scoremat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
         error = np.mean(error) * 100
-        if norm:
+        if norm and msg:
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
-        old_iters.append(updated_mat)
         if (error_2 / error > 0.99) and (error_2 / error < 1.01):
             sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
             sys.stdout.flush()
@@ -186,6 +185,8 @@ def diffusion(graph, iterations, limit=2, norm=True):
         error_2 = error_1
         error_1 = error
         scoremat = updated_mat
+        if iters == 0:
+            startmat = scoremat
         iters += 1
-    return scoremat, memory, old_iters
+    return scoremat, memory, startmat
 
