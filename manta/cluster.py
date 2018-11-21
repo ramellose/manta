@@ -31,9 +31,8 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import KMeans
 import sys
-from manta.perms import perm_graph, diffusion
+from manta.perms import perm_graph, diffusion, rewire_graph
 from scipy.stats import binom_test
-from random import sample
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
@@ -66,7 +65,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat, memory, startmat = diffusion(graph=graph, limit=limit, iterations=iterations)
+    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
@@ -76,7 +75,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
                                    max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     if memory:
         bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
-                                    startmat=startmat, scoremat=scoremat, limit=limit,
+                                    diffs=diffs, scoremat=scoremat, limit=limit,
                                     iterations=iterations, max_clusters=max_clusters,
                                     min_clusters=min_clusters, cluster=cluster)
     clusdict = dict()
@@ -232,7 +231,7 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_fuzzy(graph, startmat, scoremat, adj_index, rev_index, limit, iterations,
+def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iterations,
                   max_clusters, min_clusters, cluster='KMeans'):
     """
     If a memory effect is demonstrated to exist during
@@ -243,7 +242,7 @@ def cluster_fuzzy(graph, startmat, scoremat, adj_index, rev_index, limit, iterat
     :param rev_index: Index matching node ID to matrix index
     :param limit: Error limit for diffusion
     :param iterations: Maximum number of iterations
-    :param startmat: Initial diffusion matrix
+    :param diffs: List of diffusion matrices
     :param scoremat: Diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
@@ -253,54 +252,15 @@ def cluster_fuzzy(graph, startmat, scoremat, adj_index, rev_index, limit, iterat
     # clustering on the 1st iteration already yields reasonable results
     # however, we can't separate nodes that are 'intermediates' between clusters
     # solution: permute matrix slightly, repeat clustering
-    bestcluster = np.array(cluster_hard(graph, rev_index, startmat, max_clusters,
+    # note: permuting by node selection does not work, get 50% swap rates
+    # permuting edges also does not work, get 50% swap rates
+    bestcluster = np.array(cluster_hard(graph, rev_index, diffs[0], max_clusters,
                                         min_clusters, cluster='KMeans'), dtype=object)
-    centroids = KMeans(len(set(bestcluster))).fit(startmat)
-    centroids = centroids.cluster_centers_
-    countmat = np.zeros(shape=len(bestcluster))
-    clusprobs = np.zeros(shape=len(bestcluster))
-    for i in range(1000):
-        # half of the nodes are subselected, clustering is repeated
-        nodes = sample(list(graph.nodes), (len(graph.nodes)//3)*2)
-        subgraph = graph.subgraph(nodes)
-        perm_index = dict()
-        for k in range(len(subgraph.nodes)):
-            perm_index[list(subgraph.nodes)[k]] = k
-        perm_rev = {v: k for k, v in perm_index.items()}
-        set_indices = set(adj_index.keys()).intersection(set(perm_rev.values()))
-        set_indices = {k: adj_index[k] for k in set_indices}
-        # get indices of values in permuted graph to subselect centroids and cluster
-        subcentroids = [sub[list(set_indices.values())] for sub in centroids]
-        permat, memory, permstat = diffusion(graph=subgraph, limit=limit, iterations=1)
-        permcluster = KMeans(len(set(bestcluster))).fit_predict(permstat)
-        permcentroids = KMeans(len(set(bestcluster))).fit(permstat)
-        permcentroids = permcentroids.cluster_centers_
-        clusdict = dict.fromkeys(list(range(len(set(bestcluster)))))
-        for j in range(len(permcentroids)):
-            # closest centroid is the mean value closest to 0
-            perm = permcentroids[j]
-            diff = list()
-            for m in range(len(subcentroids)):
-                centroid = subcentroids[m]
-                diff.append(abs(np.mean(centroid - perm)))
-            clusdict[(diff.index(min(diff)))] = j
-        # with the centroid mapping from before,
-        # we can see if taxa move to different centroids
-        print(clusdict)
-        for taxon in perm_index:
-            index = adj_index[taxon]
-            countmat[index] += 1
-            if bestcluster[index] != permcluster[perm_index[taxon]] and bestcluster[index] != None:
-                # if the clusters are not the same, 1 is added to the prob value
-                clusprobs[index] += 1
-        # where nodes change cluster assignment >50% of the time,
-        # the cluster assigned is 'fuzzy'
-        sys.stdout.write('Fuzzy iteration: ' + str(i) + '\n')
-        sys.stdout.flush()
-    clusprobs = clusprobs / countmat
-    bestcluster[clusprobs > 0.5] = clusprobs[clusprobs > 0.5]
-    # where nodes change cluster assignment >50% of the time,
-    # the cluster assigned is 'fuzzy'
+    # could we 'inflate' the iter=1 matrix with matrices from later iterations?
+    # by removing the normalization, we can repeat the diffusion process without acquiring flipflops
+    branch, memory, branchdiffs = diffusion(graph=graph, limit=limit, iterations=3, norm=False)
+    branchclusters = np.array(cluster_hard(graph, rev_index, branch, max_clusters,
+                                        min_clusters, cluster='KMeans'), dtype=object)
     return bestcluster
 
 

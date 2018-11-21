@@ -131,6 +131,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
     error = 100
+    diffs = list()
     iters = 0
     memory = False
     error_1 = 1  # error steps 1 and 2 iterations back
@@ -185,8 +186,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         error_2 = error_1
         error_1 = error
         scoremat = updated_mat
-        if iters == 0:
-            startmat = scoremat
+        diffs.append(scoremat)
         iters += 1
-    return scoremat, memory, startmat
+    return scoremat, memory, diffs
 
