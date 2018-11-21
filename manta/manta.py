@@ -47,10 +47,9 @@ def set_manta():
     parser.add_argument('-limit', '--convergence_limit',
                         dest='limit', type=float,
                         required=False,
-                        help='The error limit specifies how similar iterations '
-                             'of Markov clustering must be before the algorithm '
-                             'is considered to have reached convergence.  ',
-                        default=0.0005)
+                        help='The limit defines the minimum percentage decrease in error per iteration.'
+                             ' If iterations do not decrease the error anymore, the matrix is considered converged. ',
+                        default=2)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
@@ -151,12 +150,12 @@ def main():
     exit(0)
 
 
-def clus_central(graph, limit=0.00001, max_clusters=5, min_clusters=2, iterations=20,
+def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20,
                  central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
-    :param limit: Number of iterations to run until alg considers sparsity value converged.
+    :param limit: Percentage in error decrease until matrix is considered converged.
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.

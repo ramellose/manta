@@ -31,7 +31,7 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
 import sys
-from manta.perms import perm_graph, diffuse_graph, diffusion
+from manta.perms import perm_graph, diffusion
 from scipy.stats import binom_test
 
 
@@ -50,14 +50,13 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     Parameters
     ----------
     :param graph: Weighted, undirected networkx graph.
-    :param limit: Number of iterations to run until alg considers sparsity value converged.
+    :param limit: Percentage in error decrease until matrix is considered converged.
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param cluster: Algorithm for clustering of score matrix.
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
-    adj = np.zeros((len(graph.nodes), len(graph.nodes)))  # this considers diffusion, I could also just use nx adj
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
@@ -66,42 +65,15 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat = diffuse_graph(graph, limit, iterations)
+    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
     bestcluster = None
-    randomclust = np.random.randint(2, size=len(adj))
-    scores = list()
-    scores.append(sparsity_score(graph, randomclust, rev_index))
-    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
-    sys.stdout.flush()
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
-    if cluster == 'KMeans':
-        for i in range(min_clusters, max_clusters+1):
-            clusters = KMeans(i).fit_predict(scoremat)
-            score = sparsity_score(graph, clusters, rev_index)
-            sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-            sys.stdout.flush()
-            scores.append(score)
-        topscore = int(np.argmin(scores)) + min_clusters - 1
-        if topscore >= min_clusters:
-            sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
-            sys.stdout.flush()
-        else:
-            sys.stdout.write('Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
-            sys.stdout.flush()
-            topscore = min_clusters
-        bestcluster = KMeans(topscore).fit_predict(scoremat)
-    elif cluster == 'DBSCAN':
-        # note: on the arctic soils test dataset,
-        # which represents an environmental gradient,
-        # the DBSCAN clustering does not work so well;
-        # we cannot use sparsity score as a criterion
-        # for optimal cluster number
-        bestcluster = DBSCAN(min_samples=len(graph.nodes) / max_clusters).fit_predict(scoremat)
-        score = sparsity_score(graph, bestcluster, rev_index)
-        sys.stdout.write('Sparsity level of ' + str(len(set(bestcluster))) + ' clusters: ' + str(score) + '\n')
-        sys.stdout.flush()
+    if not memory:
+        bestcluster = cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster=cluster)
+    if memory:
+        bestcluster = cluster_fuzzy(graph, rev_index, diffs, max_clusters, min_clusters, cluster=cluster)
     clusdict = dict()
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = int(bestcluster[i])
@@ -209,9 +181,8 @@ def sparsity_score(graph, clusters, rev_index):
     whereas cuts through negatively-weighted edges are rewarded.
     The lowest sparsity score represents the best clustering.
     Because this sparsity score rewards cluster assignments
-    that separate out negative hubs,
-    the score is penalized for cluster number;
-    this penalty ensures that nodes with some intra-cluster
+    that separate out negative hubs.
+    This penalty ensures that nodes with some intra-cluster
     negative edges are still assigned to clusters where
     they predominantly co-occur with other cluster members.
     :param graph: NetworkX weighted, undirected graph
@@ -220,11 +191,12 @@ def sparsity_score(graph, clusters, rev_index):
     :return: Sparsity score
     """
     # set up scale for positive + negative edges
-    # if all negative edges are cut, the sparsity score should be -1
-    # if all positive edges are cut, the sparsity score should be +1
-    weights = nx.get_edge_attributes(graph, 'weight')
-    neg_score = 1 / (sum(value < 0 for value in weights.values()))
-    pos_score = 1 / (sum(value >= 0 for value in weights.values()))
+    # the sparsity score scales from -1 to 1
+    # 1 is the worst possible assignment,
+    # all negative edges inside clusters and positive outside clusters
+    # -1 is the best,
+    # with clusters containing only positive edges
+    cut_score = 1/len(graph.edges)
     sparsity = 0
     edges = list()
     for cluster_id in set(clusters):
@@ -237,7 +209,9 @@ def sparsity_score(graph, clusters, rev_index):
         weights = nx.get_edge_attributes(cluster, 'weight')
         for x in weights:
             if weights[x] < 0:
-                sparsity += neg_score
+                sparsity += cut_score
+            else:
+                sparsity -= cut_score
     all_edges = list(graph.edges)
     cuts = list()
     for edge in all_edges:
@@ -245,11 +219,130 @@ def sparsity_score(graph, clusters, rev_index):
             # problem with cluster edges having swapped orders
             cuts.append(edge)
     for edge in cuts:
-        # only add 1 to sparsity if it is a positive edge
-        # otherwise subtract 1
         cut = graph[edge[0]][edge[1]]['weight']
         if cut > 0:
-            sparsity += pos_score
+            sparsity += cut_score
         else:
-            sparsity -= neg_score
+            sparsity -= cut_score
     return sparsity
+
+
+def cluster_fuzzy(graph, rev_index, diffs, max_clusters, min_clusters, cluster='KMeans'):
+    """
+    If a memory effect is demonstrated to exist during
+    matrix diffusion, the fuzzy clustering algorithm assigns
+    cluster identity based on multiple diffusion steps.
+    :param graph: NetworkX weighted, undirected graph
+    :param rev_index: Index matching node ID to matrix index
+    :param scores: List of cluster sparsity scores
+    :param diffs: List of diffusion matrices
+    :param max_clusters: Maximum cluster number
+    :param min_clusters: Minimum cluster number
+    :param cluster: Clustering method (only KMeans supported for now)
+    :return: Vector with cluster assignments
+    """
+    difscores = list()
+    topscores = list()
+    for j in range(len(diffs)):
+        scoremat = diffs[j]
+        scores = list()
+        if cluster == 'KMeans':
+            for i in range(min_clusters, max_clusters + 1):
+                clusters = KMeans(i).fit_predict(scoremat)
+                score = sparsity_score(graph, clusters, rev_index)
+                scores.append(score)
+            topscore = int(np.argmin(scores)) + min_clusters
+            sys.stdout.write('Iteration ' + str(j) +
+                             ': lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+            sys.stdout.flush()
+        difscores.append(scores[np.argmin(scores)])
+        topscores.append(topscore)
+    separating_iters = np.where(np.array(difscores) < -0.5)[0]
+    # the -0.5 is an arbitrary quality threshold
+    sys.stdout.write('Using the following iterations for fuzzy clustering: ' + str(separating_iters) + '\n')
+    sys.stdout.flush()
+    # these iterations are able to separate the cluster relatively well
+    # can be used to identify fuzzy clusters
+    topscore = topscores[separating_iters[-1]]
+    centroids = list()
+    sep_clusters = list()
+    # we should skip the first iteration
+    # the centroids of this iteration are very close
+    # to centers of outlier clusters in following iterations
+    for j in separating_iters[1:]:
+        scoremat = diffs[j]
+        if cluster == 'KMeans':
+            sep_clusters.append(KMeans(topscores[j]).fit_predict(scoremat))
+            clusters = KMeans(topscores[j]).fit(scoremat)
+            centroids.append(clusters.cluster_centers_)
+    # once we have the centroids, we need to map clusters to eachother
+    # e.g.: cluster 1 from iter 1 may look more like cluster 4 from iter 2
+    clusdict = dict.fromkeys(list(range(topscore)))
+    for key in clusdict:
+        clusdict[key] = dict.fromkeys(list(range(len(centroids)-1)))
+        for val in clusdict[key]:
+            clusdict[key][val] = list()
+    core_centers = centroids[-1]
+    for j in range(0, len(centroids)-1):
+        iter_centers = centroids[j]
+        # closest centroid is the mean value closest to 0
+        for m in range(len(iter_centers)):
+            iter = iter_centers[m]
+            diff = list()
+            for n in range(len(core_centers)):
+                diff.append(abs(np.mean(iter-core_centers[n])))
+            clusdict[(diff.index(min(diff)))][j].append(m)
+    # with the centroid mapping from before,
+    # we can see if taxa move to different centroids
+    clusprobs = np.zeros(len(sep_clusters[-1]))
+    for i in range(0, len(sep_clusters[-1])):
+        for j in range(0, len(sep_clusters) - 1):
+            if sep_clusters[j][i] in clusdict[sep_clusters[-1][i]][j]:
+                clusprobs[i] += 1/(len(sep_clusters)-1)
+    bestcluster = sep_clusters[-1]
+    # where nodes change cluster assignment >50% of the time,
+    # the cluster assigned is 'fuzzy'
+    bestcluster[np.where(clusprobs < 0.5)] = 100
+    return bestcluster
+
+
+
+def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster='KMeans'):
+    """
+    If no memory effects are demonstrated, clusters can be identified
+    without fuzzy clustering.
+    :param graph: NetworkX weighted, undirected graph
+    :param rev_index: Index matching node ID to matrix index
+    :param scores: List of cluster sparsity scores
+    :param scoremat: Converged diffusion matrix
+    :param max_clusters: Maximum cluster number
+    :param min_clusters: Minimum cluster number
+    :param cluster: Clustering method (only KMeans supported for now)
+    :return: Vector with cluster assignments
+    """
+    randomclust = np.random.randint(2, size=len(scoremat))
+    scores = list()
+    scores.append(sparsity_score(graph, randomclust, rev_index))
+    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
+    sys.stdout.flush()
+    if cluster == 'KMeans':
+        for i in range(min_clusters, max_clusters + 1):
+            clusters = KMeans(i).fit_predict(scoremat)
+            score = sparsity_score(graph, clusters, rev_index)
+            sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+            sys.stdout.flush()
+            scores.append(score)
+        topscore = int(np.argmin(scores)) + min_clusters - 1
+        if topscore >= min_clusters:
+            sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+            sys.stdout.flush()
+        else:
+            sys.stdout.write(
+                'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
+            sys.stdout.flush()
+        bestcluster = KMeans(topscore).fit_predict(scoremat)
+    else:
+        sys.stdout.write(
+            'Warning: only K-means clustering is supported at the moment. \n Setting cluster amount to minimum value. \n')
+        sys.stdout.flush()
+    return bestcluster
