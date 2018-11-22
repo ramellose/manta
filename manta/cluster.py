@@ -266,25 +266,30 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     # each timeseries is 5 flip-flops long
     diffs = np.array(diffs)
     amplis = np.zeros(shape=(len(bestcluster),1))
-    indices = combinations_with_replacement(range(len(bestcluster)), 2)
     # only upper triangle of matrix is indexed this way
     oscillators = list()
-    for index in indices:
-        seq = diffs[:,index[0],index[1]]
+    for index in range(len(bestcluster)):
+        # just node amplitude does not work
+        # maybe amplitude compared to oscillators?
+        seq = diffs[:,index,index]
         ampli = np.max(seq) - np.min(seq)
-        amplis[index[0]] += ampli
-        amplis[index[1]] += ampli
-        if index[0] == index[1] and ampli > 0.95:
+        if ampli > 0.5:
             # if the amplitude is this large,
             # the node may be an oscillator
             # in that case, mean amplitude may be low
-            oscillators.append(index[0])
-    oscillators = [rev_index[x] for x in oscillators]
-    sys.stdout.write('Found the following oscillators: ' + str(oscillators) + '\n')
-    sys.stdout.flush()
+            oscillators.append(index)
+    for index in range(len(bestcluster)):
+        for osc in oscillators:
+            seq = diffs[:,osc,index]
+            ampli = np.max(seq) - np.min(seq)
+            amplis[index] += ampli
     minval = np.percentile(amplis, 10)  # the 30 threshold is arbitrary; maybe fit a reciprocal function?
     locs = np.where(amplis < minval)[0]
     bestcluster[locs] = 0
+    oscillators = [rev_index[x] for x in oscillators]
+    bestcluster = amplis
+    sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
+    sys.stdout.flush()
     return bestcluster
 
 
