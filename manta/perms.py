@@ -122,6 +122,10 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     Subsequently, the matrix is scaled. The
     cumulative error, relative to the previous iteration,
     is calculated by taking the mean of the difference.
+
+    If a memory effect is detected, not the outcome matrix but the first iteration is returned.
+    Additionally, 5 iterations after the flip-flop state has been reached are calculated.
+
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
@@ -137,6 +141,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     error_1 = 1  # error steps 1 and 2 iterations back
     error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
     while error > limit and iters < iterations:
+        # if there is no flip-flop state, the error will decrease after convergence
         updated_mat = np.linalg.matrix_power(scoremat, 2)
         #updated_mat = deepcopy(scoremat)
         #for entry in np.nditer(updated_mat, op_flags=['readwrite']):
@@ -178,15 +183,21 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         if norm and msg:
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
-        if (error_2 / error > 0.99) and (error_2 / error < 1.01):
+        if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+            # if there is a flip-flop state, the error will alternate between two values
             sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
             sys.stdout.flush()
             memory = True
-            break
+            iterations = iters + 5
         error_2 = error_1
         error_1 = error
         scoremat = updated_mat
+        if iters == 0:
+            firstmat = updated_mat
         diffs.append(scoremat)
         iters += 1
+    if memory:
+        diffs = diffs[-5:]
+        scoremat = firstmat
     return scoremat, memory, diffs
 

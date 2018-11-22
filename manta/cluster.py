@@ -33,6 +33,7 @@ from sklearn.cluster import KMeans
 import sys
 from manta.perms import perm_graph, diffusion, rewire_graph
 from scipy.stats import binom_test
+from itertools import combinations_with_replacement
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
@@ -242,7 +243,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     :param rev_index: Index matching node ID to matrix index
     :param limit: Error limit for diffusion
     :param iterations: Maximum number of iterations
-    :param diffs: List of diffusion matrices
+    :param diffs: List of diffusion matrices extracted from flip-flops
     :param scoremat: Diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
@@ -251,16 +252,30 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     """
     # clustering on the 1st iteration already yields reasonable results
     # however, we can't separate nodes that are 'intermediates' between clusters
-    # solution: permute matrix slightly, repeat clustering
-    # note: permuting by node selection does not work, get 50% swap rates
-    # permuting edges also does not work, get 50% swap rates
-    bestcluster = np.array(cluster_hard(graph, rev_index, diffs[0], max_clusters,
-                                        min_clusters, cluster='KMeans'), dtype=object)
-    # could we 'inflate' the iter=1 matrix with matrices from later iterations?
-    # by removing the normalization, we can repeat the diffusion process without acquiring flipflops
-    branch, memory, branchdiffs = diffusion(graph=graph, limit=limit, iterations=3, norm=False)
-    branchclusters = np.array(cluster_hard(graph, rev_index, branch, max_clusters,
-                                        min_clusters, cluster='KMeans'), dtype=object)
+    # solution: find nodes with the lowest cumulative edge amplitudes
+    # the nodes that oscillate the most, have the largest self-loop amplitude
+    # these are on the cluster periphery
+    # nodes that are in-between clusters do not have large self-loop amplitudes
+    bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
+                               max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
+    bestcluster = bestcluster + 1
+    # cluster assignment 0 is reserved for fuzzy clusters
+    sys.stdout.write('Determining fuzzy nodes. \n')
+    sys.stdout.flush()
+    # diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge
+    # each timeseries is 5 flip-flops long
+    diffs = np.array(diffs)
+    amplis = np.zeros(shape=(len(bestcluster),1))
+    indices = combinations_with_replacement(range(len(bestcluster)), 2)
+    # only upper triangle of matrix is indexed this way
+    for index in indices:
+        seq = diffs[:,index[0],index[1]]
+        ampli = np.max(seq) - np.min(seq)
+        amplis[index[0]] += ampli
+        amplis[index[1]] += ampli
+    minval = np.percentile(amplis, 20)  # the 30 threshold is arbitrary; maybe fit a reciprocal function?
+    locs = np.where(amplis < minval)[0]
+    bestcluster[locs] = 0
     return bestcluster
 
 
@@ -303,4 +318,6 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
         sys.stdout.write(
             'Warning: only K-means clustering is supported at the moment. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
+    bestcluster = bestcluster + 1
+    # cluster assignment 0 is reserved for fuzzy clusters
     return bestcluster
