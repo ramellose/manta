@@ -268,12 +268,21 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     amplis = np.zeros(shape=(len(bestcluster),1))
     indices = combinations_with_replacement(range(len(bestcluster)), 2)
     # only upper triangle of matrix is indexed this way
+    oscillators = list()
     for index in indices:
         seq = diffs[:,index[0],index[1]]
         ampli = np.max(seq) - np.min(seq)
         amplis[index[0]] += ampli
         amplis[index[1]] += ampli
-    minval = np.percentile(amplis, 20)  # the 30 threshold is arbitrary; maybe fit a reciprocal function?
+        if index[0] == index[1] and ampli > 0.95:
+            # if the amplitude is this large,
+            # the node may be an oscillator
+            # in that case, mean amplitude may be low
+            oscillators.append(index[0])
+    oscillators = [rev_index[x] for x in oscillators]
+    sys.stdout.write('Found the following oscillators: ' + str(oscillators) + '\n')
+    sys.stdout.flush()
+    minval = np.percentile(amplis, 10)  # the 30 threshold is arbitrary; maybe fit a reciprocal function?
     locs = np.where(amplis < minval)[0]
     bestcluster[locs] = 0
     return bestcluster
