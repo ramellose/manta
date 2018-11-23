@@ -60,7 +60,7 @@ def rewire_graph(graph, error):
     return model
 
 
-def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
+def perm_graph(graph, permutations, percentile, pos, neg, error):
     """
     Calls the rewire_graph function;
     returns reliability scores of edge centrality scores.
@@ -70,8 +70,6 @@ def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
     Reporting a network’s most-central actor with a confidence level.
     Computational and Mathematical Organization Theory, 23(2), 301-312.
     :param graph: NetworkX graph of a microbial association network.
-    :param matrix: Outcome of diffusion process from cluster_graph.
-    :param limit: Error limit for matrix convergence.
     :param permutations: Number of permutations to carry out. If 0, no bootstrapping is done.
     :param percentile: Determines percentile of hub species to return.
     :param pos: List of edges in the upper percentile. (e.g. positive hubs)
@@ -105,7 +103,7 @@ def perm_graph(graph, limit, permutations, percentile, pos, neg, error):
             negmatches[match] += 1
     reliability = posmatches.copy()
     reliability.update(negmatches)
-    reliability = {k: (v/permutations) for k,v in reliability.items()}
+    reliability = {k: (v/permutations) for k, v in reliability.items()}
     # p value equals number of permutations that exceeds / is smaller than matrix values
     return reliability
 
@@ -143,9 +141,9 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     while error > limit and iters < iterations:
         # if there is no flip-flop state, the error will decrease after convergence
         updated_mat = np.linalg.matrix_power(scoremat, 2)
-        #updated_mat = deepcopy(scoremat)
-        #for entry in np.nditer(updated_mat, op_flags=['readwrite']):
-           # entry[...] = entry ** 2
+        # updated_mat = deepcopy(scoremat)
+        # for entry in np.nditer(updated_mat, op_flags=['readwrite']):
+        # entry[...] = entry ** 2
         # expansion step
         # squaring the matrix without normalisation
         if norm:
@@ -154,10 +152,10 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
             # this creates a column stochastic matrix
             # here, we normalize by dividing with absolute largest value
             updated_mat = updated_mat / abs(np.max(updated_mat))
-            #updated_mat[updated_mat > 0] = \
+            # updated_mat[updated_mat > 0] = \
             #    updated_mat[updated_mat > 0] / \
             #    abs(np.max(updated_mat[updated_mat > 0]))
-            #updated_mat[updated_mat < 0] = \
+            # updated_mat[updated_mat < 0] = \
             #    updated_mat[updated_mat < 0] / \
             #    abs(np.min(updated_mat[updated_mat < 0]))
             # the above code scales negative and positive values separately
@@ -200,4 +198,3 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         diffs = diffs[-5:]
         scoremat = firstmat
     return scoremat, memory, diffs
-

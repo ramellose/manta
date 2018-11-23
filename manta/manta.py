@@ -16,7 +16,8 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import sys
 import argparse
-from manta.cluster import cluster_graph, central_edge, central_node
+from manta.cluster import cluster_graph
+from manta.centrality import central_edge, central_node
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 
@@ -170,7 +171,6 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20,
                             min_clusters=min_clusters, iterations=iterations,
                             cluster=cluster)
     graph = results[0]
-    matrix = results[1]
     if central:
         central_edge(graph, percentile=percentile,
                      permutations=permutations, error=error)

@@ -92,6 +92,7 @@ def generate_layout(graph, tax=None):
                 new_coords[coord] = [new_x, new_y]
     return new_coords
 
+
 def generate_tax_weights(graph, tax):
     """
     Returns supplied graph with node similarity as node properties.
@@ -113,11 +114,10 @@ def generate_tax_weights(graph, tax):
         taxdata = csv.reader(tax, delimiter='\t')
         header = next(taxdata)
         for row in taxdata:
-            for i in range(1,len(row)):
+            for i in range(1, len(row)):
                 if row[i] != 'NA' or 'None':
                     taxdict[tax_levels[i-1]][row[0]] = row[i]
         for edge in graph.edges:
-            equal = True
             score = 7
             # maximum score 7 means all taxonomic levels are equal
             # attractive force in spring layout algorithm is then largest
@@ -145,7 +145,6 @@ def generate_tax_weights(graph, tax):
                 tax_in_network = True
         if tax_in_network:
             for edge in graph.edges:
-                equal = True
                 score = 7
                 # maximum score 7 means all taxonomic levels are equal
                 # attractive force in spring layout algorithm is then largest
@@ -175,4 +174,3 @@ def generate_tax_weights(graph, tax):
             tax_weights[edge] = tax_weights[edge] + p_scaled
     nx.set_edge_attributes(graph, tax_weights, 'tax_score')
     return graph
-

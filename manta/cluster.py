@@ -11,14 +11,6 @@ Then, the following steps are carried out until sparsity has stabilized:
 5. Calculate error by subtracting previous matrix from current matrix
 6. If error threshold is reached, the algorithm stops
 
-The generated score matrices and flow matrices are then supplied to the centrality function.
-The centrality of an edge is calculated by the value of an edge in the matrix.
-Hence, this does not imply that an edge had a large effect on other edges;
-rather, it implies that it was affected by many of the diffusion processes during the iterations.
-
-These centrality scores are then tested for their robustness using the functions in bootstrap_centrality.
-As the absolute value of the scores is irrelevant,
-only the ID of the edge (negative or positive hub) and the p-value is returned.
 """
 
 __author__ = 'Lisa Rottjers'
@@ -31,9 +23,8 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import KMeans
 import sys
-from manta.perms import perm_graph, diffusion, rewire_graph
-from scipy.stats import binom_test
-from itertools import combinations_with_replacement
+from manta.perms import diffusion
+from itertools import combinations
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
@@ -84,97 +75,6 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
         clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
     return graph, scoremat
-
-
-def central_edge(graph, percentile, permutations, error):
-    """
-    The min / max values that are the result of the diffusion process
-    are used as a centrality measure and define positive as well as negative hub associations.
-
-    If the permutation number is set to a value above 0, the centrality values are tested against permuted graphs.
-
-    The fraction of positive edges and negative edges is based on the ratio between
-    positive and negative weights in the network.
-
-    Hence, a network with 90 positive weights and 10 negative weights will have 90% positive hubs returned.
-
-    Parameters
-    ----------
-    :param graph: NetworkX graph of a microbial association network.
-    :param percentile: Determines percentile of hub species to return.
-    :param permutations: Number of permutations to carry out. If 0, no permutation test is done.
-    :param error: Fraction of edges to rewire for reliability metric.
-    :return: Networkx graph with hub ID / p-value as node property.
-    """
-    scoremat = diffusion(graph, iterations=3, norm=False)[0]
-    negthresh = np.percentile(scoremat, percentile)
-    posthresh = np.percentile(scoremat, 100-percentile)
-    neghubs = list(map(tuple, np.argwhere(scoremat <= negthresh)))
-    poshubs = list(map(tuple, np.argwhere(scoremat >= posthresh)))
-    adj_index = dict()
-    for i in range(len(graph.nodes)):
-        adj_index[list(graph.nodes)[i]] = i
-    if permutations > 0:
-        score = perm_graph(graph, scoremat, percentile=percentile, permutations=permutations,
-                           pos=poshubs, neg=neghubs, error=error)
-    # need to make sure graph is undirected
-    graph = nx.to_undirected(graph)
-    # initialize empty dictionary to store edge ID
-    edge_vals = dict()
-    edge_scores = dict()
-    # need to convert matrix index to node ID
-    for edge in neghubs:
-        node1 = list(graph.nodes)[edge[0]]
-        node2 = list(graph.nodes)[edge[1]]
-        edge_vals[(node1, node2)] = 'negative hub'
-        if permutations > 0:
-            edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
-    for edge in poshubs:
-        node1 = list(graph.nodes)[edge[0]]
-        node2 = list(graph.nodes)[edge[1]]
-        edge_vals[(node1, node2)] = 'positive hub'
-        if permutations > 0:
-            edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
-    nx.set_edge_attributes(graph, values=edge_vals, name='hub')
-    if permutations > 0:
-        nx.set_edge_attributes(graph, values=edge_scores, name='reliability score')
-
-
-def central_node(graph):
-    """
-    Given a graph with hub edges assigned (see central_edge),
-    this function checks whether a node is significantly more connected
-    to edges with high scores than expected by chance.
-    The p-value is calculated with a binomial test.
-    Edge sign is ignored; hubs can have both positive and negative
-    edges.
-    :param graph: NetworkX graph with edge centrality scores assigned
-    :return: NetworkX graph with hub centrality for nodes
-    """
-    edges = nx.get_edge_attributes(graph, "hub")
-    hubs = list()
-    for edge in edges:
-        hubs.append(edge[0])
-        hubs.append(edge[1])
-    hubs = list(set(hubs))
-    sighubs = dict()
-    pvals = dict()
-    for node in hubs:
-        hub_edges = 0
-        for edge in graph[node]:
-            if 'hub' in graph[node][edge]:
-                hub_edges += 1
-        # given that some of the edges
-        # this is compared to the total edge number of the node
-        # probability is calculated by dividing total number of hub edges in graph
-        # by total number of edges in graph
-        pval = binom_test(hub_edges, len(graph[node]),
-                          (len(edges)/len(graph.edges)), alternative='greater')
-        if pval < 0.05:
-            sighubs[node] = 'hub'
-            pvals[node] = float(pval)
-    nx.set_node_attributes(graph, values=sighubs, name='hub')
-    nx.set_node_attributes(graph, values=pvals, name='hub p-value')
 
 
 def sparsity_score(graph, clusters, rev_index):
@@ -258,7 +158,6 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     # nodes that are in-between clusters do not have large self-loop amplitudes
     bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
-    bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
     sys.stdout.write('Determining fuzzy nodes. \n')
     sys.stdout.flush()
@@ -268,9 +167,9 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     amplis = np.zeros(shape=(len(bestcluster),1))
     # only upper triangle of matrix is indexed this way
     oscillators = list()
+    oscillators_series = list()
     for index in range(len(bestcluster)):
-        # just node amplitude does not work
-        # maybe amplitude compared to oscillators?
+        # node amplitude is NOT correlated to position in network
         seq = diffs[:,index,index]
         ampli = np.max(seq) - np.min(seq)
         if ampli > 0.5:
@@ -278,18 +177,70 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
             # the node may be an oscillator
             # in that case, mean amplitude may be low
             oscillators.append(index)
-    for index in range(len(bestcluster)):
-        for osc in oscillators:
-            seq = diffs[:,osc,index]
-            ampli = np.max(seq) - np.min(seq)
-            amplis[index] += ampli
-    minval = np.percentile(amplis, 10)  # the 30 threshold is arbitrary; maybe fit a reciprocal function?
-    locs = np.where(amplis < minval)[0]
-    bestcluster[locs] = 0
+            oscillators_series.append(seq)
     oscillators = [rev_index[x] for x in oscillators]
-    bestcluster = amplis
     sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
     sys.stdout.flush()
+    anti_corrs = None
+    # we find two anti-correlated oscillator nodes
+    for pair in combinations(range(len(oscillators)), 2):
+        total = oscillators_series[pair[0]] - oscillators_series[pair[1]]
+        if np.max(total) == 1 and np.min(total) == -1:
+            anti_corrs = (oscillators[pair[0]], oscillators[pair[1]])
+    # get all shortest paths to/from oscillators
+    corrdict = dict.fromkeys(anti_corrs)
+    weights = nx.get_edge_attributes(graph, 'weight')
+    max_weight = max(weights.values())
+    weights = {k: v / max_weight for k, v in weights.items()}
+    rev_weights = dict()
+    for key in weights:
+        newkey = (key[1], key[0])
+        rev_weights[newkey] = weights[key]
+    weights = {**weights, **rev_weights}
+    # first scale edge weights
+    for node in anti_corrs:
+        targets = list(graph.nodes)
+        corrdict[node] = dict()
+        for target in targets:
+            shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
+            total_weight = 0
+            for path in shortest_paths:
+                edge_weight = 1
+                for i in range(len(path) - 1):
+                    edge_weight *= weights[(path[i], path[i + 1])]
+                total_weight += edge_weight
+            total_weight = edge_weight / len(shortest_paths)
+            corrdict[node][target] = total_weight
+    clusdict = dict.fromkeys(anti_corrs)
+    for x in clusdict:
+        clusdict[x] = bestcluster[adj_index[x]]
+    clusdict = {v: k for k, v in clusdict.items()}
+    varweights = list()  # stores nodes that have low weights of mean shortest paths
+    clus_matches = list()  # stores nodes that have matching signs for oscillators
+    clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
+    # first need to scale weight variables for this
+    for target in graph.nodes:
+        if np.sign(corrdict[list(corrdict.keys())[0]][target]) == np.sign(corrdict[list(corrdict.keys())[1]][target]):
+            # if the signs of the shortest paths to the oscillators are the same,
+            # this implies the node is in between cluster
+            clus_matches.append(target)
+        assignment = bestcluster[adj_index[target]]
+        # if nodes are assigned to the same cluster as the oscillators
+        # cumulative edge weights of shortest paths should be + 1
+        weight = corrdict[clusdict[assignment]][target]
+        if np.sign(weight) == -1:
+            clus_assign.append(target)
+        if weight < 0.5 and weight > -0.5: # the 0.5 and -0.5 values are arbitrary
+            varweights.append(target)
+    sys.stdout.write('Sign of cumulative edge weights does not match cluster assignment for: \n' +
+                     str(clus_assign) + '\n' +
+                     'Variable edge weights of shortest paths for: \n' +
+                     str(varweights) + '\n' +
+                     'Cumulative edge weights are the same sign for both cluster oscillators: \n' +
+                     str(clus_matches) + '\n')
+    sys.stdout.flush()
+    remove_cluster = [adj_index[x] for x in clus_assign + varweights + clus_matches]
+    bestcluster[remove_cluster] = 0
     return bestcluster
 
 

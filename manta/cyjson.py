@@ -189,4 +189,3 @@ def write_cyjson(filename, graph, layout=None):
 
     with open(filename, 'w') as outfile:
         json.dump(jsondata, outfile)
-
