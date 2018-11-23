@@ -206,7 +206,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
     clus_nodes = {k: v for k, v in clus_nodes.items() if v is not None}
     # it is possible for clusters to not have a strong oscillator
     core_oscillators = set(list(chain.from_iterable(list(clus_nodes.values()))))
-    anti_corrs = dict.fromkeys(core_oscillators, 0)
+    id_corrs = dict.fromkeys(core_oscillators, 0)
     anti_sizes = dict.fromkeys(core_oscillators, 0)
     for nodes in combinations(core_oscillators, 2):
         try:
@@ -214,15 +214,15 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
         except KeyError:
             size = amplis[(nodes[1], nodes[0])]
         if size > anti_sizes[nodes[0]]:
-            anti_corrs[nodes[0]] = nodes[1]
+            id_corrs[nodes[0]] = nodes[1]
             anti_sizes[nodes[0]] = size
-        elif size > anti_sizes[nodes[1]]:
-            anti_corrs[nodes[1]] = nodes[0]
+        if size > anti_sizes[nodes[1]]:
+            id_corrs[nodes[1]] = nodes[0]
             anti_sizes[nodes[1]] = size
-    clusdict = {v: k for k, v in clusdict.items()}
+    [clusdict.pop(x) for x in list(clusdict.keys()) if x not in core_oscillators]
+    anti_corrs = dict()
     for core in core_oscillators:
-        anti_corrs[clusdict[core]] = anti_corrs.pop(core)
-        anti_corrs[clusdict[core]] = clusdict[anti_corrs[clusdict[core]]]
+        anti_corrs[clusdict[core]] = clusdict[id_corrs[core]]
     # oscillator is defined as strongest anti-correlation
     # get all shortest paths to/from oscillators
     corrdict = dict.fromkeys(core_oscillators)
