@@ -27,7 +27,7 @@ from manta.perms import diffusion
 from itertools import combinations, chain
 
 
-def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
+def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescale,
                   cluster='KMeans'):
     """
     Takes a networkx graph
@@ -46,6 +46,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
+    :param edgescale: Scaling factor used to separate out fuzzy cluster.
     :param cluster: Algorithm for clustering of score matrix.
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
@@ -67,7 +68,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
                                    max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     if memory:
         bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
-                                    diffs=diffs, scoremat=scoremat, max_clusters=max_clusters,
+                                    diffs=diffs, scoremat=scoremat, edgescale=edgescale, max_clusters=max_clusters,
                                     min_clusters=min_clusters, cluster=cluster)
     clusdict = dict()
     for i in range(len(graph.nodes)):
@@ -131,7 +132,7 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index,
+def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
                   max_clusters, min_clusters, cluster='KMeans'):
     """
     If a memory effect is demonstrated to exist during
@@ -142,6 +143,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index,
     :param rev_index: Index matching node ID to matrix index
     :param diffs: List of diffusion matrices extracted from flip-flops
     :param scoremat: Diffusion matrix
+    :param edgescale: Scaling factor used to separate out fuzzy cluster.
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
     :param cluster: Clustering method (only KMeans supported for now)
@@ -246,7 +248,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index,
         weight = corrdict[clusdict[assignment]][target]
         if np.sign(weight) == -1:
             clus_assign.append(target)
-        if -0.5 < weight < 0.5:  # the 0.5 and -0.5 values are arbitrary
+        if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
             varweights.append(target)
     sys.stdout.write('Sign of cumulative edge weights does not match cluster assignment for: \n' +
                      str(clus_assign) + '\n' +

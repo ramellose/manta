@@ -102,6 +102,12 @@ def set_manta():
                         required=False,
                         help='Fraction of edges to rewire for reliability tests. ',
                         default=0.1)
+    parser.add_argument('-scale', '--edgescale',
+                        dest='edgescale', type=int,
+                        required=False,
+                        help='Edge scale used to separate out fuzzy clusters. '
+                             'The larger the edge scale, the larger the fuzzy cluster.',
+                        default=0.5)
     return parser
 
 
@@ -131,7 +137,7 @@ def main():
     network = nx.to_undirected(network)
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
-                             central=args['central'], percentile=args['p'], permutations=args['perm'],
+                             edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
                              cluster=args['cluster'], error=args['error'])
     layout = None
     if args['layout']:
@@ -151,7 +157,7 @@ def main():
     exit(0)
 
 
-def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20,
+def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.5,
                  central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1):
     """
     Main function that carries out graph clustering and calculates centralities.
@@ -160,6 +166,7 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20,
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
+    :param edgescale: Scaling factor used to separate out fuzzy cluster.
     :param central: If True, centrality values are calculated.
     :param percentile: Determines percentile thresholds.
     :param permutations: Number of permutations.
@@ -169,7 +176,7 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20,
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
                             min_clusters=min_clusters, iterations=iterations,
-                            cluster=cluster)
+                            edgescale=edgescale, cluster=cluster)
     graph = results[0]
     if central:
         central_edge(graph, percentile=percentile,
