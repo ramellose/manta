@@ -252,6 +252,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
     clus_matches = list()  # stores nodes that have matching signs for oscillators
     clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
     # first need to scale weight variables for this
+    clus_neutral = list()
     clusdict = dict.fromkeys(core_oscillators)
     for x in clusdict:
         clusdict[x] = bestcluster[adj_index[x]]
@@ -263,6 +264,8 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
             # not all clusters have an oscillator,
             # therefore, they don't have an anti-correlating oscillator either
             if np.sign(corrdict[clusdict[assignment]][target]) == np.sign(corrdict[clusdict[opposite]][target]):
+                clus_matches.append(target)
+            if np.sign(corrdict[clusdict[opposite]][target]) == 0:
                 clus_matches.append(target)
         except KeyError:
             pass
@@ -279,7 +282,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
                      str(clus_assign) + '\n' +
                      'Low mean edge weights of shortest paths to oscillator for: \n' +
                      str(varweights) + '\n' +
-                     'Cumulative edge weights of shortest paths are the same sign for opposing oscillators: \n' +
+                     'Cumulative edge weights of shortest paths are not the opposite sign for opposing oscillators: \n' +
                      str(clus_matches) + '\n')
     sys.stdout.flush()
     remove_cluster = [adj_index[x] for x in clus_assign + varweights + clus_matches]
