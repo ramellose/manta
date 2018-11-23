@@ -24,7 +24,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 import sys
 from manta.perms import diffusion
-from itertools import combinations
+from itertools import combinations, chain
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
@@ -67,8 +67,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations,
                                    max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     if memory:
         bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
-                                    diffs=diffs, scoremat=scoremat, limit=limit,
-                                    iterations=iterations, max_clusters=max_clusters,
+                                    diffs=diffs, scoremat=scoremat, max_clusters=max_clusters,
                                     min_clusters=min_clusters, cluster=cluster)
     clusdict = dict()
     for i in range(len(graph.nodes)):
@@ -132,7 +131,7 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iterations,
+def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index,
                   max_clusters, min_clusters, cluster='KMeans'):
     """
     If a memory effect is demonstrated to exist during
@@ -141,8 +140,6 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     :param graph: NetworkX weighted, undirected graph
     :param adj_index: Index matching matrix index to node ID
     :param rev_index: Index matching node ID to matrix index
-    :param limit: Error limit for diffusion
-    :param iterations: Maximum number of iterations
     :param diffs: List of diffusion matrices extracted from flip-flops
     :param scoremat: Diffusion matrix
     :param max_clusters: Maximum cluster number
@@ -164,13 +161,12 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     # diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge
     # each timeseries is 5 flip-flops long
     diffs = np.array(diffs)
-    amplis = np.zeros(shape=(len(bestcluster),1))
     # only upper triangle of matrix is indexed this way
     oscillators = list()
     oscillators_series = list()
     for index in range(len(bestcluster)):
         # node amplitude is NOT correlated to position in network
-        seq = diffs[:,index,index]
+        seq = diffs[:, index, index]
         ampli = np.max(seq) - np.min(seq)
         if ampli > 0.5:
             # if the amplitude is this large,
@@ -181,15 +177,32 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     oscillators = [rev_index[x] for x in oscillators]
     sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
     sys.stdout.flush()
-    anti_corrs = None
-    # we find two anti-correlated oscillator nodes
+    anti_corrs = dict()
+    clusdict = dict.fromkeys(oscillators)
+    for x in clusdict:
+        clusdict[x] = bestcluster[adj_index[x]]
+    # we find anti-correlated oscillator nodes
+    # there should be at least one node represented for each cluster
     for pair in combinations(range(len(oscillators)), 2):
         total = oscillators_series[pair[0]] - oscillators_series[pair[1]]
-        if np.max(total) > 0.99 and np.min(total) < -0.99:
-            # need to be careful with this number,
-            # the core oscillators should converge to 1 and -1
-            # but may stick a little below that value
-            anti_corrs = (oscillators[pair[0]], oscillators[pair[1]])
+        # need to be careful with this number,
+        # the core oscillators should converge to 1 and -1
+        # but may stick a little below that value
+        anti_corrs[(oscillators[pair[0]], oscillators[pair[1]])] = (np.max(total) - np.min(total))
+    # need to find the largest anti-correlation per cluster
+    clus_corrs = dict.fromkeys(set(bestcluster), 0)
+    clus_nodes = dict.fromkeys(set(bestcluster))
+    for corr in anti_corrs:
+        cluster1 = clusdict[corr[0]]
+        cluster2 = clusdict[corr[1]]
+        if anti_corrs[corr] > clus_corrs[cluster1]:
+            clus_nodes[cluster1] = corr
+            clus_corrs[cluster1] = anti_corrs[corr]
+        if anti_corrs[corr] > clus_corrs[cluster2]:
+            clus_nodes[cluster2] = corr
+            clus_corrs[cluster2] = anti_corrs[corr]
+    anti_corrs = set(list(chain.from_iterable(list(clus_nodes.values()))))
+    # oscillator is defined as strongest anti-correlation
     # get all shortest paths to/from oscillators
     corrdict = dict.fromkeys(anti_corrs)
     weights = nx.get_edge_attributes(graph, 'weight')
@@ -212,16 +225,16 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
                 for i in range(len(path) - 1):
                     edge_weight *= weights[(path[i], path[i + 1])]
                 total_weight += edge_weight
-            total_weight = edge_weight / len(shortest_paths)
+            total_weight = total_weight / len(shortest_paths)
             corrdict[node][target] = total_weight
-    clusdict = dict.fromkeys(anti_corrs)
-    for x in clusdict:
-        clusdict[x] = bestcluster[adj_index[x]]
-    clusdict = {v: k for k, v in clusdict.items()}
     varweights = list()  # stores nodes that have low weights of mean shortest paths
     clus_matches = list()  # stores nodes that have matching signs for oscillators
     clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
     # first need to scale weight variables for this
+    clusdict = dict.fromkeys(anti_corrs)
+    for x in clusdict:
+        clusdict[x] = bestcluster[adj_index[x]]
+    clusdict = {v: k for k, v in clusdict.items()}
     for target in graph.nodes:
         if np.sign(corrdict[list(corrdict.keys())[0]][target]) == np.sign(corrdict[list(corrdict.keys())[1]][target]):
             # if the signs of the shortest paths to the oscillators are the same,
@@ -233,7 +246,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
         weight = corrdict[clusdict[assignment]][target]
         if np.sign(weight) == -1:
             clus_assign.append(target)
-        if weight < 0.5 and weight > -0.5: # the 0.5 and -0.5 values are arbitrary
+        if -0.5 < weight < 0.5:  # the 0.5 and -0.5 values are arbitrary
             varweights.append(target)
     sys.stdout.write('Sign of cumulative edge weights does not match cluster assignment for: \n' +
                      str(clus_assign) + '\n' +
@@ -247,14 +260,12 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     return bestcluster
 
 
-
 def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster='KMeans'):
     """
     If no memory effects are demonstrated, clusters can be identified
     without fuzzy clustering.
     :param graph: NetworkX weighted, undirected graph
     :param rev_index: Index matching node ID to matrix index
-    :param scores: List of cluster sparsity scores
     :param scoremat: Converged diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
@@ -266,6 +277,7 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
     scores.append(sparsity_score(graph, randomclust, rev_index))
     sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
     sys.stdout.flush()
+    bestcluster = None
     if cluster == 'KMeans':
         for i in range(min_clusters, max_clusters + 1):
             clusters = KMeans(i).fit_predict(scoremat)
@@ -284,7 +296,8 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
         bestcluster = KMeans(topscore).fit_predict(scoremat)
     else:
         sys.stdout.write(
-            'Warning: only K-means clustering is supported at the moment. \n Setting cluster amount to minimum value. \n')
+            'Warning: only K-means clustering is supported at the moment. \n '
+            'Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
