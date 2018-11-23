@@ -17,7 +17,6 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-import sys
 from manta.perms import diffusion, perm_graph
 from scipy.stats import binom_test
 

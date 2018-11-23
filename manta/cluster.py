@@ -185,7 +185,10 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, limit, iteration
     # we find two anti-correlated oscillator nodes
     for pair in combinations(range(len(oscillators)), 2):
         total = oscillators_series[pair[0]] - oscillators_series[pair[1]]
-        if np.max(total) == 1 and np.min(total) == -1:
+        if np.max(total) > 0.99 and np.min(total) < -0.99:
+            # need to be careful with this number,
+            # the core oscillators should converge to 1 and -1
+            # but may stick a little below that value
             anti_corrs = (oscillators[pair[0]], oscillators[pair[1]])
     # get all shortest paths to/from oscillators
     corrdict = dict.fromkeys(anti_corrs)
