@@ -50,7 +50,7 @@ def central_edge(graph, percentile, permutations, error):
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
     if permutations > 0:
-        score = perm_graph(graph, scoremat, percentile=percentile, permutations=permutations,
+        score = perm_graph(graph, percentile=percentile, permutations=permutations,
                            pos=poshubs, neg=neghubs, error=error)
     # need to make sure graph is undirected
     graph = nx.to_undirected(graph)
