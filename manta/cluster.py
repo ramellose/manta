@@ -252,7 +252,6 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
     clus_matches = list()  # stores nodes that have matching signs for oscillators
     clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
     # first need to scale weight variables for this
-    clus_neutral = list()
     clusdict = dict.fromkeys(core_oscillators)
     for x in clusdict:
         clusdict[x] = bestcluster[adj_index[x]]
@@ -262,7 +261,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
         try:
             opposite = anti_corrs[assignment]
             # not all clusters have an oscillator,
-            # therefore, they don't have an anti-correlating oscillator either
+            # therefore, not all have anti-correlating oscillators
             if np.sign(corrdict[clusdict[assignment]][target]) == np.sign(corrdict[clusdict[opposite]][target]):
                 clus_matches.append(target)
             if np.sign(corrdict[clusdict[opposite]][target]) == 0:
@@ -273,11 +272,15 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
             # this implies the node is in between cluster
         # if nodes are assigned to the same cluster as the oscillators
         # cumulative edge weights of shortest paths should be + 1
-        weight = corrdict[clusdict[assignment]][target]
-        if np.sign(weight) == -1:
-            clus_assign.append(target)
-        if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
-            varweights.append(target)
+        try:
+            weight = corrdict[clusdict[assignment]][target]
+            if np.sign(weight) == -1:
+                clus_assign.append(target)
+            if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
+                varweights.append(target)
+        except KeyError:
+            pass
+            # cannot check oscillator sign for clusters w/o oscillators
     sys.stdout.write('Sign of cumulative edge weights does not match cluster assignment for: \n' +
                      str(clus_assign) + '\n' +
                      'Low mean edge weights of shortest paths to oscillator for: \n' +
