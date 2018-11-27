@@ -97,9 +97,9 @@ def sparsity_score(graph, clusters, rev_index):
     """
     # set up scale for positive + negative edges
     # the sparsity score scales from -1 to 1
-    # 1 is the worst possible assignment,
+    # -1 is the worst possible assignment,
     # all negative edges inside clusters and positive outside clusters
-    # -1 is the best,
+    # 1 is the best,
     # with clusters containing only positive edges
     cut_score = 1/len(graph.edges)
     sparsity = 0
@@ -114,9 +114,9 @@ def sparsity_score(graph, clusters, rev_index):
         weights = nx.get_edge_attributes(cluster, 'weight')
         for x in weights:
             if weights[x] < 0:
-                sparsity += cut_score
-            else:
                 sparsity -= cut_score
+            else:
+                sparsity += cut_score
     all_edges = list(graph.edges)
     cuts = list()
     for edge in all_edges:
@@ -126,9 +126,9 @@ def sparsity_score(graph, clusters, rev_index):
     for edge in cuts:
         cut = graph[edge[0]][edge[1]]['weight']
         if cut > 0:
-            sparsity += cut_score
-        else:
             sparsity -= cut_score
+        else:
+            sparsity += cut_score
     return sparsity
 
 
