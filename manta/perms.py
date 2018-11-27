@@ -181,7 +181,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         if norm and msg:
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
-        if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+        if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory and not msg:
             # if there is a flip-flop state, the error will alternate between two values
             sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
             sys.stdout.flush()

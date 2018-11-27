@@ -281,11 +281,11 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
         except KeyError:
             pass
             # cannot check oscillator sign for clusters w/o oscillators
-    sys.stdout.write('Sign of cumulative edge weights does not match cluster assignment for: \n' +
+    sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
                      str(clus_assign) + '\n' +
-                     'Low mean edge weights of shortest paths to oscillator for: \n' +
+                     'Mean edge products are small for: \n' +
                      str(varweights) + '\n' +
-                     'Cumulative edge weights of shortest paths are not the opposite sign for opposing oscillators: \n' +
+                     'Mean edge products are not the opposite sign for opposing oscillators: \n' +
                      str(clus_matches) + '\n')
     sys.stdout.flush()
     remove_cluster = [adj_index[x] for x in clus_assign + varweights + clus_matches]
