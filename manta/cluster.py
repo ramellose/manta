@@ -323,7 +323,7 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
             scores.append(score)
         topscore = int(np.argmax(scores)) + min_clusters - 1
         if topscore >= min_clusters:
-            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores)) + '\n')
             sys.stdout.flush()
         else:
             sys.stdout.write(
