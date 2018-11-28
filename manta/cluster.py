@@ -28,7 +28,7 @@ from itertools import combinations, chain
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescale,
-                  cluster='KMeans'):
+                  cluster='KMeans', fuzzy=True):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -48,6 +48,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     :param iterations: If algorithm does not converge, it stops here.
     :param edgescale: Scaling factor used to separate out fuzzy cluster.
     :param cluster: Algorithm for clustering of score matrix.
+    :param fuzzy: If true, fuzzy nodes are identified
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
     adj_index = dict()
@@ -69,7 +70,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     if memory:
         bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
                                     diffs=diffs, scoremat=scoremat, edgescale=edgescale, max_clusters=max_clusters,
-                                    min_clusters=min_clusters, cluster=cluster)
+                                    min_clusters=min_clusters, cluster=cluster, fuzzy=fuzzy)
     clusdict = dict()
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
@@ -133,7 +134,7 @@ def sparsity_score(graph, clusters, rev_index):
 
 
 def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
-                  max_clusters, min_clusters, cluster='KMeans'):
+                  max_clusters, min_clusters, cluster='KMeans', fuzzy=True):
     """
     If a memory effect is demonstrated to exist during
     matrix diffusion, the fuzzy clustering algorithm assigns
@@ -147,6 +148,7 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
     :param cluster: Clustering method (only KMeans supported for now)
+    :param fuzzy: If true, fuzzy nodes are identified
     :return: Vector with cluster assignments
     """
     # clustering on the 1st iteration already yields reasonable results
@@ -179,117 +181,118 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
     oscillators = [rev_index[x] for x in oscillators]
     sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
     sys.stdout.flush()
-    amplis = dict()
-    clusdict = dict.fromkeys(oscillators)
-    for x in clusdict:
-        clusdict[x] = bestcluster[adj_index[x]]
-    # we find anti-correlated oscillator nodes
-    # there should be at least one node represented for each cluster
-    for pair in combinations(range(len(oscillators)), 2):
-        total = oscillators_series[pair[0]] - oscillators_series[pair[1]]
-        # need to be careful with this number,
-        # the core oscillators should converge to 1 and -1
-        # but may stick a little below that value
-        amplis[(oscillators[pair[0]], oscillators[pair[1]])] = (np.max(total) - np.min(total))
-    # need to find the largest anti-correlation per cluster
-    clus_corrs = dict.fromkeys(set(bestcluster), 0)
-    clus_nodes = dict.fromkeys(set(bestcluster))
-    for corr in amplis:
-        cluster1 = clusdict[corr[0]]
-        cluster2 = clusdict[corr[1]]
-        if amplis[corr] > clus_corrs[cluster1]:
-            clus_nodes[cluster1] = corr
-            clus_corrs[cluster1] = amplis[corr]
-        if amplis[corr] > clus_corrs[cluster2]:
-            clus_nodes[cluster2] = corr
-            clus_corrs[cluster2] = amplis[corr]
-    clus_nodes = {k: v for k, v in clus_nodes.items() if v is not None}
-    # it is possible for clusters to not have a strong oscillator
-    core_oscillators = set(list(chain.from_iterable(list(clus_nodes.values()))))
-    id_corrs = dict.fromkeys(core_oscillators, 0)
-    anti_sizes = dict.fromkeys(core_oscillators, 0)
-    for nodes in combinations(core_oscillators, 2):
-        try:
-            size = amplis[nodes]
-        except KeyError:
-            size = amplis[(nodes[1], nodes[0])]
-        if size > anti_sizes[nodes[0]]:
-            id_corrs[nodes[0]] = nodes[1]
-            anti_sizes[nodes[0]] = size
-        if size > anti_sizes[nodes[1]]:
-            id_corrs[nodes[1]] = nodes[0]
-            anti_sizes[nodes[1]] = size
-    [clusdict.pop(x) for x in list(clusdict.keys()) if x not in core_oscillators]
-    anti_corrs = dict()
-    for core in core_oscillators:
-        anti_corrs[clusdict[core]] = clusdict[id_corrs[core]]
-    # oscillator is defined as strongest anti-correlation
-    # get all shortest paths to/from oscillators
-    corrdict = dict.fromkeys(core_oscillators)
-    weights = nx.get_edge_attributes(graph, 'weight')
-    max_weight = max(weights.values())
-    weights = {k: v / max_weight for k, v in weights.items()}
-    rev_weights = dict()
-    for key in weights:
-        newkey = (key[1], key[0])
-        rev_weights[newkey] = weights[key]
-    weights = {**weights, **rev_weights}
-    # first scale edge weights
-    for node in core_oscillators:
-        targets = list(graph.nodes)
-        corrdict[node] = dict()
-        for target in targets:
-            shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
-            total_weight = 0
-            for path in shortest_paths:
-                edge_weight = 1
-                for i in range(len(path) - 1):
-                    edge_weight *= weights[(path[i], path[i + 1])]
-                total_weight += edge_weight
-            total_weight = total_weight / len(shortest_paths)
-            corrdict[node][target] = total_weight
-    varweights = list()  # stores nodes that have low weights of mean shortest paths
-    clus_matches = list()  # stores nodes that have matching signs for oscillators
-    clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
-    # first need to scale weight variables for this
-    clusdict = dict.fromkeys(core_oscillators)
-    for x in clusdict:
-        clusdict[x] = bestcluster[adj_index[x]]
-    clusdict = {v: k for k, v in clusdict.items()}
-    for target in graph.nodes:
-        assignment = bestcluster[adj_index[target]]
-        try:
-            opposite = anti_corrs[assignment]
-            # not all clusters have an oscillator,
-            # therefore, not all have anti-correlating oscillators
-            if np.sign(corrdict[clusdict[assignment]][target]) == np.sign(corrdict[clusdict[opposite]][target]):
-                clus_matches.append(target)
-            if np.sign(corrdict[clusdict[opposite]][target]) == 0:
-                clus_matches.append(target)
-        except KeyError:
-            pass
-            # if the signs of the shortest paths to the oscillators are the same,
-            # this implies the node is in between cluster
-        # if nodes are assigned to the same cluster as the oscillators
-        # cumulative edge weights of shortest paths should be + 1
-        try:
-            weight = corrdict[clusdict[assignment]][target]
-            if np.sign(weight) == -1:
-                clus_assign.append(target)
-            if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
-                varweights.append(target)
-        except KeyError:
-            pass
-            # cannot check oscillator sign for clusters w/o oscillators
-    sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
-                     str(clus_assign) + '\n' +
-                     'Mean edge products are small for: \n' +
-                     str(varweights) + '\n' +
-                     'Mean edge products are not the opposite sign for opposing oscillators: \n' +
-                     str(clus_matches) + '\n')
-    sys.stdout.flush()
-    remove_cluster = [adj_index[x] for x in clus_assign + varweights + clus_matches]
-    bestcluster[remove_cluster] = 0
+    if fuzzy:
+        amplis = dict()
+        clusdict = dict.fromkeys(oscillators)
+        for x in clusdict:
+            clusdict[x] = bestcluster[adj_index[x]]
+        # we find anti-correlated oscillator nodes
+        # there should be at least one node represented for each cluster
+        for pair in combinations(range(len(oscillators)), 2):
+            total = oscillators_series[pair[0]] - oscillators_series[pair[1]]
+            # need to be careful with this number,
+            # the core oscillators should converge to 1 and -1
+            # but may stick a little below that value
+            amplis[(oscillators[pair[0]], oscillators[pair[1]])] = (np.max(total) - np.min(total))
+        # need to find the largest anti-correlation per cluster
+        clus_corrs = dict.fromkeys(set(bestcluster), 0)
+        clus_nodes = dict.fromkeys(set(bestcluster))
+        for corr in amplis:
+            cluster1 = clusdict[corr[0]]
+            cluster2 = clusdict[corr[1]]
+            if amplis[corr] > clus_corrs[cluster1]:
+                clus_nodes[cluster1] = corr
+                clus_corrs[cluster1] = amplis[corr]
+            if amplis[corr] > clus_corrs[cluster2]:
+                clus_nodes[cluster2] = corr
+                clus_corrs[cluster2] = amplis[corr]
+        clus_nodes = {k: v for k, v in clus_nodes.items() if v is not None}
+        # it is possible for clusters to not have a strong oscillator
+        core_oscillators = set(list(chain.from_iterable(list(clus_nodes.values()))))
+        id_corrs = dict.fromkeys(core_oscillators, 0)
+        anti_sizes = dict.fromkeys(core_oscillators, 0)
+        for nodes in combinations(core_oscillators, 2):
+            try:
+                size = amplis[nodes]
+            except KeyError:
+                size = amplis[(nodes[1], nodes[0])]
+            if size > anti_sizes[nodes[0]]:
+                id_corrs[nodes[0]] = nodes[1]
+                anti_sizes[nodes[0]] = size
+            if size > anti_sizes[nodes[1]]:
+                id_corrs[nodes[1]] = nodes[0]
+                anti_sizes[nodes[1]] = size
+        [clusdict.pop(x) for x in list(clusdict.keys()) if x not in core_oscillators]
+        anti_corrs = dict()
+        for core in core_oscillators:
+            anti_corrs[clusdict[core]] = clusdict[id_corrs[core]]
+        # oscillator is defined as strongest anti-correlation
+        # get all shortest paths to/from oscillators
+        corrdict = dict.fromkeys(core_oscillators)
+        weights = nx.get_edge_attributes(graph, 'weight')
+        max_weight = max(weights.values())
+        weights = {k: v / max_weight for k, v in weights.items()}
+        rev_weights = dict()
+        for key in weights:
+            newkey = (key[1], key[0])
+            rev_weights[newkey] = weights[key]
+        weights = {**weights, **rev_weights}
+        # first scale edge weights
+        for node in core_oscillators:
+            targets = list(graph.nodes)
+            corrdict[node] = dict()
+            for target in targets:
+                shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
+                total_weight = 0
+                for path in shortest_paths:
+                    edge_weight = 1
+                    for i in range(len(path) - 1):
+                        edge_weight *= weights[(path[i], path[i + 1])]
+                    total_weight += edge_weight
+                total_weight = total_weight / len(shortest_paths)
+                corrdict[node][target] = total_weight
+        varweights = list()  # stores nodes that have low weights of mean shortest paths
+        clus_matches = list()  # stores nodes that have matching signs for oscillators
+        clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
+        # first need to scale weight variables for this
+        clusdict = dict.fromkeys(core_oscillators)
+        for x in clusdict:
+            clusdict[x] = bestcluster[adj_index[x]]
+        clusdict = {v: k for k, v in clusdict.items()}
+        for target in graph.nodes:
+            assignment = bestcluster[adj_index[target]]
+            try:
+                opposite = anti_corrs[assignment]
+                # not all clusters have an oscillator,
+                # therefore, not all have anti-correlating oscillators
+                if np.sign(corrdict[clusdict[assignment]][target]) == np.sign(corrdict[clusdict[opposite]][target]):
+                    clus_matches.append(target)
+                if np.sign(corrdict[clusdict[opposite]][target]) == 0:
+                    clus_matches.append(target)
+            except KeyError:
+                pass
+                # if the signs of the shortest paths to the oscillators are the same,
+                # this implies the node is in between cluster
+            # if nodes are assigned to the same cluster as the oscillators
+            # cumulative edge weights of shortest paths should be + 1
+            try:
+                weight = corrdict[clusdict[assignment]][target]
+                if np.sign(weight) == -1:
+                    clus_assign.append(target)
+                if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
+                    varweights.append(target)
+            except KeyError:
+                pass
+                # cannot check oscillator sign for clusters w/o oscillators
+        sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
+                         str(clus_assign) + '\n' +
+                         'Mean edge products are small for: \n' +
+                         str(varweights) + '\n' +
+                         'Mean edge products are not the opposite sign for opposing oscillators: \n' +
+                         str(clus_matches) + '\n')
+        sys.stdout.flush()
+        remove_cluster = [adj_index[x] for x in clus_assign + varweights + clus_matches]
+        bestcluster[remove_cluster] = 0
     return bestcluster
 
 
@@ -318,9 +321,9 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
             sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
             sys.stdout.flush()
             scores.append(score)
-        topscore = int(np.argmin(scores)) + min_clusters - 1
+        topscore = int(np.argmax(scores)) + min_clusters - 1
         if topscore >= min_clusters:
-            sys.stdout.write('Lowest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
+            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.min(scores)) + '\n')
             sys.stdout.flush()
         else:
             sys.stdout.write(

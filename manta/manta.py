@@ -108,6 +108,11 @@ def set_manta():
                         help='Edge scale used to separate out fuzzy clusters. '
                              'The larger the edge scale, the larger the fuzzy cluster.',
                         default=0.5)
+    parser.add_argument('-fuzzy', '--fuzzy_nodes',
+                        dest='fuzzy',
+                        required=False,
+                        help='If set to True, fuzzy nodes are separated from the clusters. ',
+                        default=True)
     return parser
 
 
@@ -138,7 +143,7 @@ def main():
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
                              edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
-                             cluster=args['cluster'], error=args['error'])
+                             cluster=args['cluster'], error=args['error'], fuzzy=args['fuzzy'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -158,7 +163,7 @@ def main():
 
 
 def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.5,
-                 central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1):
+                 central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1, fuzzy=True):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -172,11 +177,12 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
     :param permutations: Number of permutations.
     :param cluster: Algorithm for clustering of diffusion matrix.
     :param error: Fraction of edges to rewire for reliability tests.
+    :param fuzzy: If true, fuzzy nodes are identified
     :return:
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
                             min_clusters=min_clusters, iterations=iterations,
-                            edgescale=edgescale, cluster=cluster)
+                            edgescale=edgescale, cluster=cluster, fuzzy=fuzzy)
     graph = results[0]
     if central:
         central_edge(graph, percentile=percentile,
