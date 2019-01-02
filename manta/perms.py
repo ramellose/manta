@@ -160,6 +160,16 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
             #    abs(np.min(updated_mat[updated_mat < 0]))
             # the above code scales negative and positive values separately
             # interestingly, the matrix does not separate correctly if used
+        # we need to check the percentile;
+        # if over 99% of values are close to 0,
+        # this indicates the matrix is busy converging to 0
+        # in that case, we do the same as with the memory effect
+        if np.percentile(updated_mat, 99) < 0.00000000001:
+            sys.stdout.write('Matrix converging to zero.' + '\n' +
+                             'Clustering with first iteration. ' + '\n')
+            sys.stdout.flush()
+            break
+            memory = True
         for value in np.nditer(updated_mat, op_flags=['readwrite']):
             if value != 0:
                 # normally, there is an inflation step; values are raised to a power
@@ -173,20 +183,26 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
                 except RuntimeWarning:
                     sys.stdout.write('Warning: matrix overflow detected.' + '\n' +
                                      'Please retry with a higher error limit. ' + '\n')
-                    exit(1)
+                    break
         if norm:
-            updated_mat = updated_mat / abs(np.max(updated_mat))
+                updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(updated_mat - scoremat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
         error = np.mean(error) * 100
         if norm and msg:
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
-        if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory and not msg:
-            # if there is a flip-flop state, the error will alternate between two values
-            sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
-            sys.stdout.flush()
+        try:
+            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory and not msg:
+                # if there is a flip-flop state, the error will alternate between two values
+                sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
+                sys.stdout.flush()
+                memory = True
+                iterations = iters + 5
+        except RuntimeWarning:
             memory = True
-            iterations = iters + 5
+            sys.stdout.write('Matrix converged to zero.' + '\n' +
+                             'Clustering with first iteration. ' + '\n')
+            sys.stdout.flush()
         error_2 = error_1
         error_1 = error
         scoremat = updated_mat

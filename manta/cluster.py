@@ -242,14 +242,19 @@ def cluster_fuzzy(graph, diffs, scoremat, adj_index, rev_index, edgescale,
             targets = list(graph.nodes)
             corrdict[node] = dict()
             for target in targets:
-                shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
-                total_weight = 0
-                for path in shortest_paths:
-                    edge_weight = 1
-                    for i in range(len(path) - 1):
-                        edge_weight *= weights[(path[i], path[i + 1])]
-                    total_weight += edge_weight
-                total_weight = total_weight / len(shortest_paths)
+                try:
+                    shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
+                    total_weight = 0
+                    for path in shortest_paths:
+                        edge_weight = 1
+                        for i in range(len(path) - 1):
+                            edge_weight *= weights[(path[i], path[i + 1])]
+                        total_weight += edge_weight
+                    total_weight = total_weight / len(shortest_paths)
+                except nx.exception.NetworkXNoPath:
+                    sys.stdout.write("Could not find shortest path for: " + target)
+                    sys.stdout.flush()
+                    total_weight = -1
                 corrdict[node][target] = total_weight
         varweights = list()  # stores nodes that have low weights of mean shortest paths
         clus_matches = list()  # stores nodes that have matching signs for oscillators
