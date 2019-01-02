@@ -164,7 +164,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         # if over 99% of values are close to 0,
         # this indicates the matrix is busy converging to 0
         # in that case, we do the same as with the memory effect
-        if np.percentile(updated_mat, 99) < 0.00000000001:
+        if np.percentile(updated_mat, 99) < 0.00000001:
             sys.stdout.write('Matrix converging to zero.' + '\n' +
                              'Clustering with first iteration. ' + '\n')
             sys.stdout.flush()
