@@ -2,6 +2,8 @@
 
 Microbial association network clustering algorithm. Version 0.1.0.
 
+[![Build Status](https://travis-ci.com/ramellose/manta.svg?token=9mhqeTh13MErxyrk5zR8&branch=master)](https://travis-ci.com/ramellose/manta)
+
 This toolbox is aimed at weighted & undirected microbial networks. It uses a diffusion-based proccess to carry out network clustering & centrality calculations.
 Moreover, it can generate a Cytoscape-compatible layout that places taxonomically similar & structurally similar nodes closer together.
 Contact the author at lisa.rottjers (at) kuleuven.be. Your feedback is much appreciated!
