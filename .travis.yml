@@ -5,6 +5,8 @@ python:
   - "3.6"
   - "3.7-dev"  # 3.7 development branch
 # command to install dependencies
+before_install:
+  - python setup.py install
 install:
   - pip install -r requirements.txt
 # command to run tests
