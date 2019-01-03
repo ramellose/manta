@@ -8,6 +8,7 @@ setup(name='manta',
       author_email='lisa.rottjers@kuleuven.be',
       url='https://github.com/ramellose/manta',
       license='Apache-2.0',
+      include_package_data=True,
       summary='Clustering and centrality algorithms for weighted and undirected networks.',
       entry_points={
           'console_scripts': [
