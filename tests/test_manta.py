@@ -11,7 +11,7 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manta.manta import clus_central
-from manta.cluster import cluster_graph, sparsity_score
+from manta.cluster import cluster_graph, sparsity_score, cluster_fuzzy
 from manta.perms import rewire_graph, perm_graph, diffusion
 from manta.centrality import central_edge, central_node
 from manta.layout import generate_layout, generate_tax_weights
@@ -169,6 +169,22 @@ class TestMain(unittest.TestCase):
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
+
+    def test_cluster_fuzzy(self):
+        """Cluster_hard is already tested through the regular cluster_graph function.
+        To test cluster_fuzzy, this function carries out clustering as
+        if a memory effect has been detected."""
+        graph = deepcopy(g)
+        adj_index = dict()
+        for i in range(len(graph.nodes)):
+            adj_index[list(graph.nodes)[i]] = i
+        rev_index = {v: k for k, v in adj_index.items()}
+        scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
+        bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
+                                    diffs=diffs, scoremat=scoremat, edgescale=0.5, max_clusters=max_clusters,
+                                    min_clusters=min_clusters, cluster=cluster, fuzzy=True)
+        # So some nodes with contrasting signs are actually identified..
+        self.assertEqual(bestcluster[0], 0)
 
 
 if __name__ == '__main__':
