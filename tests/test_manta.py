@@ -11,8 +11,9 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manta.manta import clus_central
-from manta.cluster import central_edge, cluster_graph, diffuse_graph, sparsity_score, central_node
-from manta.perms import rewire_graph, perm_graph
+from manta.cluster import cluster_graph, sparsity_score
+from manta.perms import rewire_graph, perm_graph, diffusion
+from manta.centrality import central_edge, central_node
 from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
@@ -93,7 +94,7 @@ class TestMain(unittest.TestCase):
         WARNING: at the moment the test indicates that centrality measures
         are not stable.
         """
-        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         graph = results[0]
         central_edge(graph, percentile, permutations, error)
         hubs = nx.get_edge_attributes(graph, 'hub')
@@ -104,7 +105,7 @@ class TestMain(unittest.TestCase):
         Checks if, given a graph that has been tested for centrality,
         no nodes are identified as hubs (actually the p-value is too low).
         """
-        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         graph = results[0]
         central_edge(graph, percentile, permutations, error)
         central_node(graph)
@@ -112,7 +113,7 @@ class TestMain(unittest.TestCase):
 
     def test_cluster_manca(self):
         """Checks whether the correct cluster IDs are assigned. """
-        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
 
@@ -120,18 +121,18 @@ class TestMain(unittest.TestCase):
         """Checks whether correct sparsity scores are calculated.
         Because this network has 3 negative edges separating
         2 clusters, the score should be -3 + the penalty of 2000. """
-        scoremat = diffuse_graph(g, limit, iterations)
+        scoremat = diffusion(g, limit, iterations)[0]
         clusters = KMeans(2).fit_predict(scoremat)
         adj_index = dict()
         for i in range(len(g.nodes)):
             adj_index[list(g.nodes)[i]] = i
         rev_index = {v: k for k, v in adj_index.items()}
         sparsity = sparsity_score(g, clusters, rev_index)
-        self.assertEqual(sparsity, 1997)
+        self.assertEqual(int(sparsity), 1)
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """
-        new_adj = diffuse_graph(g, iterations=iterations)
+        new_adj = diffusion(g, iterations=iterations)[0]
         self.assertNotEqual(np.mean(new_adj), 0)
 
     def test_rewire_graph_equal(self):
@@ -146,7 +147,7 @@ class TestMain(unittest.TestCase):
 
     def test_bootstrap(self):
         """Checks if reliability scores for the graph are returned. """
-        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
         matrix = results[1]
@@ -154,8 +155,8 @@ class TestMain(unittest.TestCase):
         posthresh = np.percentile(matrix, 100 - percentile)
         neghubs = list(map(tuple, np.argwhere(matrix <= negthresh)))
         poshubs = list(map(tuple, np.argwhere(matrix >= posthresh)))
-        bootmats = perm_graph(g, limit, permutations, percentile, poshubs, neghubs, error=0.1)
-        self.assertEqual(21, len(bootmats))
+        bootmats = perm_graph(g, permutations, percentile, poshubs, neghubs, error=0.1)
+        self.assertEqual(100, len(bootmats))
 
     def test_tax_weights(self):
         """Checks whether the tax weights for the edges are correctly calculated."""
@@ -165,7 +166,7 @@ class TestMain(unittest.TestCase):
 
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
-        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations)
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 
