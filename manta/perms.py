@@ -136,6 +136,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     diffs = list()
     iters = 0
     memory = False
+    convergence = True
     error_1 = 1  # error steps 1 and 2 iterations back
     error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
     while error > limit and iters < iterations:
@@ -166,10 +167,10 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         # in that case, we do the same as with the memory effect
         if np.percentile(updated_mat, 99) < 0.00000001:
             sys.stdout.write('Matrix converging to zero.' + '\n' +
-                             'Clustering with first iteration. ' + '\n')
+                             'Clustering with second iteration. ' + '\n')
             sys.stdout.flush()
+            convergence = True
             break
-            memory = True
         for value in np.nditer(updated_mat, op_flags=['readwrite']):
             if value != 0:
                 # normally, there is an inflation step; values are raised to a power
@@ -199,9 +200,9 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
                 memory = True
                 iterations = iters + 5
         except RuntimeWarning:
-            memory = True
+            convergence = True
             sys.stdout.write('Matrix converged to zero.' + '\n' +
-                             'Clustering with first iteration. ' + '\n')
+                             'Clustering with second iteration. ' + '\n')
             sys.stdout.flush()
         error_2 = error_1
         error_1 = error
@@ -213,4 +214,6 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     if memory:
         diffs = diffs[-5:]
         scoremat = firstmat
+    if convergence:
+        scoremat = diffs[1]
     return scoremat, memory, diffs
