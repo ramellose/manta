@@ -402,6 +402,6 @@ def _node_sparsity(graph, removals, assignment, rev_index):
             updated_assignment = deepcopy(assignment)
             updated_assignment[node] = id
             other_sparsities.append(sparsity_score(graph, updated_assignment, rev_index))
-        if np.max(other_sparsities) < default_sparsity:
+        if np.max(other_sparsities) < (default_sparsity - 0.1):
             updated_removals.remove(node)
     return updated_removals
