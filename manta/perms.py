@@ -108,7 +108,7 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
     return reliability
 
 
-def diffusion(graph, iterations, limit=2, norm=True, msg=False):
+def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
@@ -128,6 +128,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
     :param norm: Normalize values so they converge to -1 or 1
+    :param inflation: Carry out network diffusion with/without inflation
     :param msg: If true, print error size per iteration
     :return: score matrix, memory effect, initial diffusion matrix
     """
@@ -167,24 +168,25 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         # in that case, we do the same as with the memory effect
         if np.percentile(updated_mat, 99) < 0.00000001:
             sys.stdout.write('Matrix converging to zero.' + '\n' +
-                             'Clustering with second iteration. ' + '\n')
+                             'Clustering with branching process. ' + '\n')
             sys.stdout.flush()
             convergence = True
             break
-        for value in np.nditer(updated_mat, op_flags=['readwrite']):
-            if value != 0:
-                # normally, there is an inflation step; values are raised to a power
-                # with this normalisation, the inflation step causes
-                # the algorithm to converge to 0
-                # we need above-0 values to converge to -1, and the rest to 1
-                # previous: value * abs(value)
-                # this inflation does not result in desired sparsity
-                try:
-                    value[...] = value + (1/value)
-                except RuntimeWarning:
-                    sys.stdout.write('Warning: matrix overflow detected.' + '\n' +
-                                     'Please retry with a higher error limit. ' + '\n')
-                    break
+        if inflation:
+            for value in np.nditer(updated_mat, op_flags=['readwrite']):
+                if value != 0:
+                    # normally, there is an inflation step; values are raised to a power
+                    # with this normalisation, the inflation step causes
+                    # the algorithm to converge to 0
+                    # we need above-0 values to converge to -1, and the rest to 1
+                    # previous: value * abs(value)
+                    # this inflation does not result in desired sparsity
+                    try:
+                        value[...] = value + (1/value)
+                    except RuntimeWarning:
+                        sys.stdout.write('Warning: matrix overflow detected.' + '\n' +
+                                         'Please retry with a higher error limit. ' + '\n')
+                        break
         if norm:
                 updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(updated_mat - scoremat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
@@ -202,7 +204,7 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         except RuntimeWarning:
             convergence = True
             sys.stdout.write('Matrix converged to zero.' + '\n' +
-                             'Clustering with second iteration. ' + '\n')
+                             'Clustering with branching process. ' + '\n')
             sys.stdout.flush()
         error_2 = error_1
         error_1 = error
@@ -214,6 +216,4 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
     if memory:
         diffs = diffs[-5:]
         scoremat = firstmat
-    if convergence:
-        scoremat = firstmat
-    return scoremat, memory, diffs
+    return scoremat, memory, convergence, diffs

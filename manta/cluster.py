@@ -60,7 +60,9 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
+    scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
+    if convergence:
+        scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=3, inflation=False)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
