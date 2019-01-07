@@ -215,5 +215,5 @@ def diffusion(graph, iterations, limit=2, norm=True, msg=False):
         diffs = diffs[-5:]
         scoremat = firstmat
     if convergence:
-        scoremat = diffs[1]
+        scoremat = firstmat
     return scoremat, memory, diffs
