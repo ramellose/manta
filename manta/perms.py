@@ -25,7 +25,7 @@ __license__ = 'Apache 2.0'
 
 
 import sys
-from random import choice
+from random import choice, sample
 import networkx as nx
 import numpy as np
 
@@ -168,7 +168,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
         # in that case, we do the same as with the memory effect
         if np.percentile(updated_mat, 99) < 0.00000001:
             sys.stdout.write('Matrix converging to zero.' + '\n' +
-                             'Clustering with branching process. ' + '\n')
+                             'Clustering with partial network. ' + '\n')
             sys.stdout.flush()
             convergence = True
             break
@@ -195,7 +195,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
         try:
-            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory and not msg:
+            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
                 # if there is a flip-flop state, the error will alternate between two values
                 sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
                 sys.stdout.flush()
@@ -204,7 +204,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
         except RuntimeWarning:
             convergence = True
             sys.stdout.write('Matrix converged to zero.' + '\n' +
-                             'Clustering with branching process. ' + '\n')
+                             'Clustering with partial network. ' + '\n')
             sys.stdout.flush()
         error_2 = error_1
         error_1 = error
@@ -217,3 +217,123 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
         diffs = diffs[-5:]
         scoremat = firstmat
     return scoremat, memory, convergence, diffs
+
+
+def partial_diffusion(graph, iterations, limit=2):
+    """
+    Partial diffusion process for generation of scoring matrix.
+    Some matrices may be unable to reach convergence
+    or enter a flip-flopping state.
+    A partial diffusion process can still discover relationships
+    between unlinked taxa when this is not possible.
+    :param graph: NetworkX graph of a microbial assocation network
+    :param iterations: Maximum number of iterations to carry out
+    :param limit: Percentage in error decrease until matrix is considered converged
+    :return: score matrix, memory effect, initial diffusion matrix
+    """
+    scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
+    nums = int(len(graph)/5)*4  # fraction of edges in subnetwork set to 0
+    result = list()
+    subnum = 100  # number of subnetworks generated
+    for b in range(subnum):  # 100 is arbitrarily chosen
+        indices = sample(range(len(graph)), nums)
+        # we randomly sample from the indices and create a subgraph from this
+        submat = np.copy(scoremat)
+        submat[indices, :] = 0
+        submat[:, indices] = 0
+        error = 100
+        diffs = list()
+        iters = 0
+        max_iters = iterations
+        memory = False
+        convergence = True
+        error_1 = 1  # error steps 1 and 2 iterations back
+        error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
+        while error > limit and iters < max_iters:
+            # if there is no flip-flop state, the error will decrease after convergence
+            updated_mat = np.linalg.matrix_power(submat, 2)
+            # updated_mat = deepcopy(scoremat)
+            # for entry in np.nditer(updated_mat, op_flags=['readwrite']):
+            # entry[...] = entry ** 2
+            # expansion step
+            # squaring the matrix without normalisation
+            # the flow matrix describes flow and is output to compute centralities
+            # in the MCL implementation, the rows are normalized to sum to 1
+            # this creates a column stochastic matrix
+            # here, we normalize by dividing with absolute largest value
+            updated_mat = updated_mat / abs(np.max(updated_mat))
+            # updated_mat[updated_mat > 0] = \
+            #    updated_mat[updated_mat > 0] / \
+            #    abs(np.max(updated_mat[updated_mat > 0]))
+            # updated_mat[updated_mat < 0] = \
+            #    updated_mat[updated_mat < 0] / \
+            #    abs(np.min(updated_mat[updated_mat < 0]))
+            # the above code scales negative and positive values separately
+            # interestingly, the matrix does not separate correctly if used
+            # we need to check the percentile;
+            # if over 99% of values are close to 0,
+            # this indicates the matrix is busy converging to 0
+            # in that case, we do the same as with the memory effect
+            if np.percentile(updated_mat, 99) < 0.00000001:
+                convergence = True
+                break
+            for value in np.nditer(updated_mat, op_flags=['readwrite']):
+                if value != 0:
+                    # normally, there is an inflation step; values are raised to a power
+                    # with this normalisation, the inflation step causes
+                    # the algorithm to converge to 0
+                    # we need above-0 values to converge to -1, and the rest to 1
+                    # previous: value * abs(value)
+                    # this inflation does not result in desired sparsity
+                    try:
+                        value[...] = value + (1/value)
+                    except RuntimeWarning:
+                        sys.stdout.write('Warning: matrix overflow detected.' + '\n')
+                        break
+            updated_mat = updated_mat / abs(np.max(updated_mat))
+            error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
+            error = np.mean(error) * 100
+            try:
+                if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+                    # if there is a flip-flop state, the error will alternate between two values
+                    memory = True
+                    max_iters = iters + 5
+            except RuntimeWarning:
+                convergence = True
+                sys.stdout.write('Matrix converged to zero.' + '\n' +
+                                 'Skipping this iteration. ' + '\n')
+                sys.stdout.flush()
+            error_2 = error_1
+            error_1 = error
+            submat = updated_mat
+            if iters == 0:
+                firstmat = updated_mat
+            diffs.append(submat)
+            iters += 1
+        if memory:
+            submat = firstmat
+        result.append(submat)
+    posfreq = np.zeros((len(graph), len(graph)))
+    negfreq = np.zeros((len(graph), len(graph)))
+    for b in range(subnum):
+        posfreq[result[b] > 0] += 1
+        negfreq[result[b] < 0] += 1
+    # we count how many times specific values in matrix have
+    # been assigned positive or negative values
+    outcome = np.zeros((len(graph), len(graph)))
+    pos_results = np.where(posfreq > 2*negfreq)
+    neg_results = np.where(negfreq > 2*posfreq)
+    # if the number of positive/negative values is large enough,
+    # this edge can be considered stable
+    # the section below adds only positive values
+    # for edges that are stable (negatively)
+    outcome = np.zeros((len(graph), len(graph)))
+    for b in range(subnum):
+        pos_sums = result[b][pos_results]
+        pos_sums[pos_sums < 0] = 0
+        outcome[pos_results] += pos_sums
+        neg_sums = result[b][neg_results]
+        neg_sums[neg_sums > 0] = 0
+        outcome[neg_results] += neg_sums
+    outcome = outcome / abs(np.max(outcome))
+    return scoremat

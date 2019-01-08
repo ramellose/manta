@@ -23,7 +23,7 @@ import networkx as nx
 import numpy as np
 from sklearn.cluster import KMeans
 import sys
-from manta.perms import diffusion
+from manta.perms import diffusion, partial_diffusion
 from itertools import combinations, chain
 from copy import deepcopy
 
@@ -61,8 +61,8 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
     scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
-    if convergence:
-        scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=3, inflation=False)
+    if memory or convergence:
+        scoremat = partial_diffusion(graph=graph)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
@@ -402,6 +402,6 @@ def _node_sparsity(graph, removals, assignment, rev_index):
             updated_assignment = deepcopy(assignment)
             updated_assignment[node] = id
             other_sparsities.append(sparsity_score(graph, updated_assignment, rev_index))
-        if np.max(other_sparsities) < (default_sparsity - 0.1):
+        if np.max(other_sparsities) < (default_sparsity - 0.3):
             updated_removals.remove(node)
     return updated_removals
