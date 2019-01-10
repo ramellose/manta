@@ -321,8 +321,8 @@ def partial_diffusion(graph, iterations, limit=2):
     # we count how many times specific values in matrix have
     # been assigned positive or negative values
     outcome = np.zeros((len(graph), len(graph)))
-    pos_results = np.where(posfreq > 2*negfreq)
-    neg_results = np.where(negfreq > 2*posfreq)
+    pos_results = np.where(posfreq > 3*negfreq)
+    neg_results = np.where(negfreq > 3*posfreq)
     # if the number of positive/negative values is large enough,
     # this edge can be considered stable
     # the section below adds only positive values
@@ -336,4 +336,4 @@ def partial_diffusion(graph, iterations, limit=2):
         neg_sums[neg_sums > 0] = 0
         outcome[neg_results] += neg_sums
     outcome = outcome / abs(np.max(outcome))
-    return scoremat
+    return outcome, result

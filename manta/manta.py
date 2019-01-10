@@ -140,13 +140,17 @@ def main():
         exit()
     # first need to convert network to undirected
     network = nx.to_undirected(network)
-    clustered = clus_central(network, limit=args['limit'],
+    nonfuzzy = False
+    clustered, nonfuzzy = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
                              edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
                              cluster=args['cluster'], error=args['error'], fuzzy=args['fuzzy'])
     layout = None
     if args['layout']:
-        layout = generate_layout(clustered, args['tax'])
+        if nonfuzzy:
+            layout = generate_layout(nonfuzzy, args['tax'])
+        else:
+            layout = generate_layout(clustered, args['tax'])
     if args['f'] == 'graphml':
         nx.write_graphml(clustered, args['fp'])
     elif args['f'] == 'edgelist':
@@ -162,7 +166,7 @@ def main():
     exit(0)
 
 
-def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.5,
+def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.1,
                  central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1, fuzzy=True):
     """
     Main function that carries out graph clustering and calculates centralities.
@@ -171,7 +175,7 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
-    :param edgescale: Scaling factor used to separate out fuzzy cluster.
+    :param edgescale: Mean edge weight for node removal
     :param central: If True, centrality values are calculated.
     :param percentile: Determines percentile thresholds.
     :param permutations: Number of permutations.
@@ -184,11 +188,12 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
                             min_clusters=min_clusters, iterations=iterations,
                             edgescale=edgescale, cluster=cluster, fuzzy=fuzzy)
     graph = results[0]
+    nonfuzzy = results[2]
     if central:
         central_edge(graph, percentile=percentile,
                      permutations=permutations, error=error)
         central_node(graph)
-    return graph
+    return graph, nonfuzzy
 
 
 if __name__ == '__main__':
