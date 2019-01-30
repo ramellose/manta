@@ -56,7 +56,6 @@ iterations = 20
 central = True
 percentile = 10
 permutations = 100
-cluster = 'KMeans'
 error = 0.1
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
@@ -181,8 +180,7 @@ class TestMain(unittest.TestCase):
         rev_index = {v: k for k, v in adj_index.items()}
         scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
         bestcluster = cluster_fuzzy(graph=graph, rev_index=rev_index, adj_index=adj_index,
-                                    diffs=diffs, scoremat=scoremat, edgescale=0.5, max_clusters=max_clusters,
-                                    min_clusters=min_clusters, cluster=cluster, fuzzy=True)
+                                    diffs=diffs, scoremat=scoremat, edgescale=0.5)
         # So some nodes with contrasting signs are actually identified..
         self.assertEqual(bestcluster[0], 0)
 

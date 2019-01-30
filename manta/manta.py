@@ -89,14 +89,9 @@ def set_manta():
     parser.add_argument('-perm', '--permutation',
                         dest='perm', type=int,
                         required=False,
-                        help='Number of permutation iterations for centrality estimates. ',
+                        help='Number of permutation iterations for centrality estimates and '
+                             'network subsetting. ',
                         default=100)
-    parser.add_argument('-cluster', '--clustering_algorithm',
-                        dest='cluster', type=str,
-                        choices=['KMeans', 'DBSCAN'],
-                        required=False,
-                        help='Choice for clustering algorithm. ',
-                        default='KMeans')
     parser.add_argument('-e', '--error',
                         dest='error', type=int,
                         required=False,
@@ -144,7 +139,7 @@ def main():
     clustered, nonfuzzy = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
                              edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
-                             cluster=args['cluster'], error=args['error'], fuzzy=args['fuzzy'])
+                             error=args['error'], fuzzy=args['fuzzy'])
     layout = None
     if args['layout']:
         if nonfuzzy:
@@ -167,7 +162,7 @@ def main():
 
 
 def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.1,
-                 central=True, percentile=10, permutations=100, cluster='KMeans', error=0.1, fuzzy=True):
+                 central=True, percentile=10, permutations=100, error=0.1, fuzzy=True):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -179,14 +174,13 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
     :param central: If True, centrality values are calculated.
     :param percentile: Determines percentile thresholds.
     :param permutations: Number of permutations.
-    :param cluster: Algorithm for clustering of diffusion matrix.
     :param error: Fraction of edges to rewire for reliability tests.
     :param fuzzy: If true, fuzzy nodes are identified
     :return:
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
                             min_clusters=min_clusters, iterations=iterations,
-                            edgescale=edgescale, cluster=cluster, fuzzy=fuzzy)
+                            edgescale=edgescale, fuzzy=fuzzy, permutations=permutations)
     graph = results[0]
     nonfuzzy = results[2]
     if central:

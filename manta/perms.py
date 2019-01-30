@@ -219,7 +219,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
     return scoremat, memory, convergence, diffs
 
 
-def partial_diffusion(graph, iterations, limit=2):
+def partial_diffusion(graph, iterations, limit=2, ratio=0.7, permutations=100):
     """
     Partial diffusion process for generation of scoring matrix.
     Some matrices may be unable to reach convergence
@@ -229,6 +229,8 @@ def partial_diffusion(graph, iterations, limit=2):
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
+    :param ratio: Ratio of positive / negative edges required for edge stability
+    :param permutations: Number of permutations for network subsetting
     :return: score matrix, memory effect, initial diffusion matrix
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
@@ -321,8 +323,11 @@ def partial_diffusion(graph, iterations, limit=2):
     # we count how many times specific values in matrix have
     # been assigned positive or negative values
     outcome = np.zeros((len(graph), len(graph)))
-    pos_results = np.where(posfreq > 3*negfreq)
-    neg_results = np.where(negfreq > 3*posfreq)
+    # add pseudo count of 1 to prevent errors with zero divison
+    posfreq += 1
+    pos_results = np.where((posfreq - negfreq) / posfreq > ratio)
+    negfreq += 1
+    neg_results = np.where((negfreq - posfreq) / negfreq > ratio)
     # if the number of positive/negative values is large enough,
     # this edge can be considered stable
     # the section below adds only positive values

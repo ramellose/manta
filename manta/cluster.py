@@ -21,15 +21,15 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import SpectralClustering
 import sys
 from manta.perms import diffusion, partial_diffusion
 from itertools import combinations, chain
 from copy import deepcopy
 
 
-def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescale,
-                  cluster='KMeans', fuzzy=True):
+def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescale, permutations=100,
+                  fuzzy=True):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -48,7 +48,6 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
     :param edgescale: Mean edge weight for node removal
-    :param cluster: Algorithm for clustering of score matrix.
     :param fuzzy: If true, fuzzy nodes are identified
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
@@ -64,26 +63,29 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     if memory or convergence:
         sys.stdout.write("Convergence detected. Switching to partial diffusion. \n")
         sys.stdout.flush()
-        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations)
+        # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
+        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, ratio=0.7, permutations=permutations)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
     #if not memory:
     bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
-                               max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
+                               max_clusters=max_clusters, min_clusters=min_clusters)
     nonfuzzy = None
     if fuzzy:
         nonfuzzy = deepcopy(graph)
         clusdict = dict()
         for i in range(len(nonfuzzy.nodes)):
-            clusdict[list(nonfuzzy.nodes)[i]] = bestcluster[i]
+            clusdict[list(nonfuzzy.nodes)[i]] = float(bestcluster[i])
         nx.set_node_attributes(nonfuzzy, values=clusdict, name='cluster')
-        fuzzy_nodes = cluster_fuzzy(graph, partials, edgescale)
+        fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=bestcluster,
+                                    edgescale=edgescale,
+                                    adj_index=adj_index, rev_index=rev_index)
         bestcluster[fuzzy_nodes] = 0
     clusdict = dict()
     for i in range(len(graph.nodes)):
-        clusdict[list(graph.nodes)[i]] = bestcluster[i]
+        clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
     return graph, scoremat, nonfuzzy
 
@@ -143,7 +145,7 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster='KMeans'):
+def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
     """
     If no memory effects are demonstrated, clusters can be identified
     without fuzzy clustering.
@@ -152,7 +154,6 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
     :param scoremat: Converged diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
-    :param cluster: Clustering method (only KMeans supported for now)
     :return: Vector with cluster assignments
     """
     randomclust = np.random.randint(2, size=len(scoremat))
@@ -161,27 +162,21 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters, cluster
     sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
     sys.stdout.flush()
     bestcluster = None
-    if cluster == 'KMeans':
-        for i in range(min_clusters, max_clusters + 1):
-            clusters = KMeans(i).fit_predict(scoremat)
-            score = sparsity_score(graph, clusters, rev_index)
-            sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-            sys.stdout.flush()
-            scores.append(score)
-        topscore = int(np.argmax(scores)) + min_clusters - 1
-        if topscore >= min_clusters:
-            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores)) + '\n')
-            sys.stdout.flush()
-        else:
-            sys.stdout.write(
-                'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
-            sys.stdout.flush()
-        bestcluster = KMeans(topscore).fit_predict(scoremat)
+    for i in range(min_clusters, max_clusters + 1):
+        clusters = SpectralClustering(i).fit_predict(scoremat)
+        score = sparsity_score(graph, clusters, rev_index)
+        sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
+        sys.stdout.flush()
+        scores.append(score)
+    topscore = int(np.argmax(scores)) + min_clusters - 1
+    if topscore >= min_clusters:
+        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores)) + '\n')
+        sys.stdout.flush()
     else:
         sys.stdout.write(
-            'Warning: only K-means clustering is supported at the moment. \n '
-            'Setting cluster amount to minimum value. \n')
+            'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
+    bestcluster = SpectralClustering(topscore).fit_predict(scoremat)
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
     return bestcluster
