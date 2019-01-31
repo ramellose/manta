@@ -21,7 +21,7 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-# from sklearn.mixture import GaussianMixture #  This works quite well, slightly better Sn
+# from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
 from manta.perms import diffusion, partial_diffusion
@@ -158,26 +158,34 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
     :return: Vector with cluster assignments
     """
     randomclust = np.random.randint(2, size=len(scoremat))
-    scores = list()
-    scores.append(sparsity_score(graph, randomclust, rev_index))
-    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores[0]) + '\n')
+    scores = dict()
+    scores['random'] = (sparsity_score(graph, randomclust, rev_index))
+    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']) + '\n')
     sys.stdout.flush()
     bestcluster = None
-    for i in range(min_clusters, max_clusters + 1):
-        clusters = AgglomerativeClustering(n_clusters=i).fit_predict(scoremat)
-        score = sparsity_score(graph, clusters, rev_index)
-        sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
-        sys.stdout.flush()
-        scores.append(score)
-    topscore = int(np.argmax(scores)) + min_clusters - 1
+    clusnum = min_clusters
+    true_clusters = min_clusters
+    while true_clusters < max_clusters + 1 and clusnum < 2*max_clusters:
+        clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(scoremat)
+        counts = np.bincount(clusters)
+        if len(np.where(counts < 5)[0]) > (clusnum - min_clusters):
+            clusnum += 1
+        else:
+            scores[clusnum] = sparsity_score(graph, clusters, rev_index)
+            true_clusters = clusnum - len(np.where(counts < 5)[0])
+            sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
+                             ', with ' + str(len(np.where(counts < 5)[0])) + ' small clusters. \n')
+            sys.stdout.flush()
+            clusnum += 1
+    topscore = max(scores, key=scores.get)
     if topscore >= min_clusters:
-        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores)) + '\n')
+        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores.values())) + '\n')
         sys.stdout.flush()
     else:
         sys.stdout.write(
             'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
-    bestcluster = AffinityPropagation(n_clusters=topscore).fit_predict(scoremat)
+    bestcluster = AgglomerativeClustering(n_clusters=topscore).fit_predict(scoremat)
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
     return bestcluster
