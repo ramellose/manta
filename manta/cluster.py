@@ -178,13 +178,14 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
             sys.stdout.flush()
             clusnum += 1
     topscore = max(scores, key=scores.get)
-    if topscore >= min_clusters:
-        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(np.max(scores.values())) + '\n')
+    if topscore != 'random':
+        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
         sys.stdout.flush()
     else:
         sys.stdout.write(
             'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
+        topscore = min_clusters
     bestcluster = AgglomerativeClustering(n_clusters=topscore).fit_predict(scoremat)
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
