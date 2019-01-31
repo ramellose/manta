@@ -22,7 +22,7 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import numpy as np
 # from sklearn.mixture import GaussianMixture #  This works quite well, slightly better Sn
-from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import AgglomerativeClustering
 import sys
 from manta.perms import diffusion, partial_diffusion
 from itertools import combinations, chain
@@ -164,7 +164,7 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
     sys.stdout.flush()
     bestcluster = None
     for i in range(min_clusters, max_clusters + 1):
-        clusters = AffinityPropagation(n_components=i, covariance_type='spherical').fit_predict(scoremat)
+        clusters = AgglomerativeClustering(n_clusters=i).fit_predict(scoremat)
         score = sparsity_score(graph, clusters, rev_index)
         sys.stdout.write('Sparsity level of k=' + str(i) + ' clusters: ' + str(score) + '\n')
         sys.stdout.flush()
@@ -177,7 +177,7 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
         sys.stdout.write(
             'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
-    bestcluster = AffinityPropagation(n_components=topscore, covariance_type='spherical').fit_predict(scoremat)
+    bestcluster = AffinityPropagation(n_clusters=topscore).fit_predict(scoremat)
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
     return bestcluster
