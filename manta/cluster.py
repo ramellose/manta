@@ -79,7 +79,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
                                     adj_index=adj_index, rev_index=rev_index)
         fuzzy_dict = dict()
         for node in graph.nodes:
-            if node in fuzzy_nodes:
+            if adj_index[node] in fuzzy_nodes:
                 fuzzy_dict[node] = 'Fuzzy'
             else:
                 fuzzy_dict[node] = 'Sharp'
