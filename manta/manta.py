@@ -136,16 +136,13 @@ def main():
     # first need to convert network to undirected
     network = nx.to_undirected(network)
     nonfuzzy = False
-    clustered, nonfuzzy = clus_central(network, limit=args['limit'],
+    clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
                              edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
                              error=args['error'], fuzzy=args['fuzzy'])
     layout = None
     if args['layout']:
-        if nonfuzzy:
-            layout = generate_layout(nonfuzzy, args['tax'])
-        else:
-            layout = generate_layout(clustered, args['tax'])
+        layout = generate_layout(clustered, args['tax'])
     if args['f'] == 'graphml':
         nx.write_graphml(clustered, args['fp'])
     elif args['f'] == 'edgelist':
@@ -182,12 +179,11 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
                             min_clusters=min_clusters, iterations=iterations,
                             edgescale=edgescale, fuzzy=fuzzy, permutations=permutations)
     graph = results[0]
-    nonfuzzy = results[2]
     if central:
         central_edge(graph, percentile=percentile,
                      permutations=permutations, error=error)
         central_node(graph)
-    return graph, nonfuzzy
+    return graph
 
 
 if __name__ == '__main__':

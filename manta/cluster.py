@@ -73,22 +73,22 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     #if not memory:
     bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters, min_clusters=min_clusters)
-    nonfuzzy = None
     if fuzzy:
-        nonfuzzy = deepcopy(graph)
-        clusdict = dict()
-        for i in range(len(nonfuzzy.nodes)):
-            clusdict[list(nonfuzzy.nodes)[i]] = float(bestcluster[i])
-        nx.set_node_attributes(nonfuzzy, values=clusdict, name='cluster')
         fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=bestcluster,
                                     edgescale=edgescale,
                                     adj_index=adj_index, rev_index=rev_index)
-        bestcluster[fuzzy_nodes] = 0
+        fuzzy_dict = dict()
+        for node in graph.nodes:
+            if node in fuzzy_nodes:
+                fuzzy_dict[node] = 'Fuzzy'
+            else:
+                fuzzy_dict[node] = 'Sharp'
+        nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
     clusdict = dict()
     for i in range(len(graph.nodes)):
         clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
     nx.set_node_attributes(graph, values=clusdict, name='cluster')
-    return graph, scoremat, nonfuzzy
+    return graph, scoremat
 
 
 def sparsity_score(graph, clusters, rev_index):
