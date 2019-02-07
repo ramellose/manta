@@ -71,10 +71,11 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
     #if not memory:
-    bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
+    bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters, min_clusters=min_clusters)
+    flatcluster = _cluster_vector(bestcluster, adj_index)
     if fuzzy:
-        fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=bestcluster,
+        fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
                                     edgescale=edgescale,
                                     adj_index=adj_index, rev_index=rev_index)
         fuzzy_dict = dict()
@@ -84,10 +85,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
             else:
                 fuzzy_dict[node] = 'Sharp'
         nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
-    clusdict = dict()
-    for i in range(len(graph.nodes)):
-        clusdict[list(graph.nodes)[i]] = float(bestcluster[i])
-    nx.set_node_attributes(graph, values=clusdict, name='cluster')
+    nx.set_node_attributes(graph, values=bestcluster, name='cluster')
     return graph, scoremat
 
 
@@ -146,16 +144,17 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
+def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_clusters):
     """
     If no memory effects are demonstrated, clusters can be identified
     without fuzzy clustering.
     :param graph: NetworkX weighted, undirected graph
+    :param adj_index: Index matching matrix index to node ID
     :param rev_index: Index matching node ID to matrix index
     :param scoremat: Converged diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
-    :return: Vector with cluster assignments
+    :return: Dictionary of nodes with cluster assignments
     """
     randomclust = np.random.randint(2, size=len(scoremat))
     scores = dict()
@@ -164,19 +163,46 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
     sys.stdout.flush()
     bestcluster = None
     clusnum = min_clusters
-    true_clusters = min_clusters
-    while true_clusters < max_clusters + 1 and clusnum < 2*max_clusters:
-        clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(scoremat)
+    scoremat_index = rev_index.copy()
+    outliers = dict()
+    outliers[clusnum] = list()
+    clustermat = scoremat.copy()
+    while clusnum < max_clusters + 1:
+        clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(clustermat)
         counts = np.bincount(clusters)
-        if len(np.where(counts < 5)[0]) > (clusnum - min_clusters):
-            clusnum += 1
+        # then add to cluster based on shortest paths
+        if len(np.where(counts < 3)[0]) > 0:
+            # if there is a cluster with fewer than 3 nodes,
+            # remove nodes that separate into tiny cluster
+            # get cluster ID and location for this cluster
+            locs = np.where(counts < 3)[0]
+            # we only remove one cluster pos at a time
+            # repeated clustering may assign node differently
+            loc = locs[0]
+            clusid = list(set(clusters))[loc]
+            clusloc = np.where(clusters == clusid)[0][0]
+            # we need to update the rev_index so that adjacency indices point to taxon IDs
+            # outlier nodes are added to a list, to be dealt with later
+            outliers[clusnum].append(scoremat_index[clusloc])
+            clustermat, scoremat_index = _remove_node(clusloc, clustermat, scoremat_index)
+            # now the smaller clusters are deleted, we can cluster on the updated scoring matrix
+            if clustermat.shape[0] <= max_clusters:
+                # indicates that there is no good clustering possible for this cluster number
+                clusnum += 1
+                outliers[clusnum] = list()
+                # reset scoring matrix in case different cluster assignment does assign outliers
+                clustermat = scoremat.copy()
+                scoremat_index = rev_index.copy()
         else:
             scores[clusnum] = sparsity_score(graph, clusters, rev_index)
-            true_clusters = clusnum - len(np.where(counts < 5)[0])
             sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
-                             ', with ' + str(len(np.where(counts < 5)[0])) + ' small clusters. \n')
+                             '. \n')
             sys.stdout.flush()
             clusnum += 1
+            outliers[clusnum] = list()
+            # reset scoring matrix in case different cluster assignment does assign outliers
+            clustermat = scoremat
+            scoremat_index = rev_index.copy()
     topscore = max(scores, key=scores.get)
     if topscore != 'random':
         sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
@@ -186,10 +212,41 @@ def cluster_hard(graph, rev_index, scoremat, max_clusters, min_clusters):
             'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
         sys.stdout.flush()
         topscore = min_clusters
-    bestcluster = AgglomerativeClustering(n_clusters=topscore).fit_predict(scoremat)
+    # given a topscore, clustering is carried out on scoremat without outliers
+    outlier_locs = [adj_index[x] for x in outliers[topscore]]
+    scoremat_index = rev_index.copy()
+    clustermat = scoremat.copy()
+    for loc in outlier_locs:
+        clustermat, scoremat_index = _remove_node(loc, clustermat, scoremat_index)
+    bestcluster = AgglomerativeClustering(n_clusters=topscore).fit_predict(clustermat)
     bestcluster = bestcluster + 1
     # cluster assignment 0 is reserved for fuzzy clusters
-    return bestcluster
+    # we need to assign outlier nodes to clusters after clustering on main network
+    corrdict = _path_weights(outliers[topscore], graph)
+    scoremat_index = {v: k for k, v in scoremat_index.items()}
+    # generate dictionary of cluster assignments
+    # use this to reconstruct bestcluster vector
+    cluster_index = adj_index.copy()
+    for key in cluster_index:
+        try:
+            cluster_index[key] = bestcluster[scoremat_index[key]]
+        except KeyError:
+            # key error happens for outlier that has not been assigned cluster ID yet
+            pass
+    # replace node values in corrdict with cluster ids
+    for node in corrdict:
+        # initialize list to store path values per cluster
+        clusdict = dict.fromkeys(set(bestcluster))
+        for key in clusdict:
+            clusdict[key] = list()
+        # lookup cluster ID of node
+        for value in corrdict[node]:
+            if value not in corrdict:
+                clusid = cluster_index[value]
+                clusdict[clusid].append(corrdict[node][value])
+        closest_cluster = list(set(bestcluster))[np.argmax([np.mean(clusdict[x]) for x in clusdict])]
+        cluster_index[node] = closest_cluster
+    return cluster_index
 
 
 def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index):
@@ -345,34 +402,7 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs, assignment, adj_index
     :return: List of node indices that are in conflict with oscillators
     """
     # get all shortest paths to/from oscillators
-    corrdict = dict.fromkeys(core_oscillators)
-    weights = nx.get_edge_attributes(graph, 'weight')
-    max_weight = max(weights.values())
-    weights = {k: v / max_weight for k, v in weights.items()}
-    rev_weights = dict()
-    for key in weights:
-        newkey = (key[1], key[0])
-        rev_weights[newkey] = weights[key]
-    weights = {**weights, **rev_weights}
-    # first scale edge weights
-    for node in core_oscillators:
-        targets = list(graph.nodes)
-        corrdict[node] = dict()
-        for target in targets:
-            try:
-                shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
-                total_weight = 0
-                for path in shortest_paths:
-                    edge_weight = 1
-                    for i in range(len(path) - 1):
-                        edge_weight *= weights[(path[i], path[i + 1])]
-                    total_weight += edge_weight
-                total_weight = total_weight / len(shortest_paths)
-            except nx.exception.NetworkXNoPath:
-                sys.stdout.write("Could not find shortest path for: " + target + "\n")
-                sys.stdout.flush()
-                total_weight = -1
-            corrdict[node][target] = total_weight
+    corrdict = _path_weights(core_oscillators, graph)
     varweights = list()  # stores nodes that have low weights of mean shortest paths
     clus_matches = list()  # stores nodes that have matching signs for oscillators
     clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
@@ -433,3 +463,77 @@ def _node_sparsity(graph, removals, assignment, rev_index):
         if np.max(other_sparsities) < (default_sparsity - 0.3):
             updated_removals.remove(node)
     return updated_removals
+
+
+def _path_weights(source, graph):
+    """
+    Given a list of nodes, this function returns a dictionary of all shortest path weights
+    from the sources to all other nodes in the network.
+    :param source: List of source nodes
+    :param graph: NetworkX graph object
+    :return: Dictionary of shortest path weights
+    """
+    corrdict = dict.fromkeys(source)
+    weights = nx.get_edge_attributes(graph, 'weight')
+    max_weight = max(weights.values())
+    weights = {k: v / max_weight for k, v in weights.items()}
+    rev_weights = dict()
+    for key in weights:
+        newkey = (key[1], key[0])
+        rev_weights[newkey] = weights[key]
+    weights = {**weights, **rev_weights}
+    # first scale edge weights
+    for node in source:
+        targets = list(graph.nodes)
+        corrdict[node] = dict()
+        for target in targets:
+            try:
+                shortest_paths = list(nx.all_shortest_paths(graph, source=node, target=target))
+                total_weight = 0
+                for path in shortest_paths:
+                    edge_weight = 1
+                    for i in range(len(path) - 1):
+                        edge_weight *= weights[(path[i], path[i + 1])]
+                    total_weight += edge_weight
+                total_weight = total_weight / len(shortest_paths)
+            except nx.exception.NetworkXNoPath:
+                sys.stdout.write("Could not find shortest path for: " + target + "\n")
+                sys.stdout.flush()
+                total_weight = -1
+            corrdict[node][target] = total_weight
+    return corrdict
+
+
+def _remove_node(loc, mat, mat_index):
+    """
+    Given an outlier node to remove,
+    this function updates the matrix and matrix index.
+    :param loc: Node to remove
+    :param mat: Scoring matrix
+    :param mat_index: Matrix index
+    :return: Tuple of  matrix and matrix_index
+    """
+    mat_index.pop(loc)
+    # need mat_index remove last key if this is not the clusloc
+    if loc != (len(mat_index)):
+        for remainder in range(loc, len(mat_index)):
+            mat_index[remainder] = mat_index[remainder + 1]
+        mat_index.pop(len(mat_index) - 1)
+    # update scoring matrix with removed nodes
+    mat = np.delete(mat, loc, axis=0)
+    mat = np.delete(mat, loc, axis=1)
+    return mat, mat_index
+
+
+def _cluster_vector(assignment, adj_index):
+    """
+    Given a dictionary of cluster assignments,
+    this helper function returns a vector with cluster IDs
+    :param assignment: Dictionary with nodes as keys, cluster IDs as values
+    :param adj_index: Dictionary with nodes as keys, matrix index as values
+    :return: Numpy array with cluster assignments
+    """
+    result = np.zeros(shape=(1, len(assignment)))[0]
+    for key in adj_index:
+        result[adj_index[key]] = assignment[key]
+    return result
