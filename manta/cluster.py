@@ -229,7 +229,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     cluster_index = adj_index.copy()
     for key in cluster_index:
         try:
-            cluster_index[key] = bestcluster[scoremat_index[key]]
+            cluster_index[key] = float(bestcluster[scoremat_index[key]])
         except KeyError:
             # key error happens for outlier that has not been assigned cluster ID yet
             pass
@@ -247,7 +247,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
             except KeyError:
                 pass
         closest_cluster = list(set(bestcluster))[np.argmax([np.mean(clusdict[x]) for x in clusdict])]
-        cluster_index[node] = closest_cluster
+        cluster_index[node] = float(closest_cluster)
     return cluster_index
 
 
