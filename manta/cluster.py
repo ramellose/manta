@@ -241,9 +241,11 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
             clusdict[key] = list()
         # lookup cluster ID of node
         for value in corrdict[node]:
-            if value not in corrdict:
+            try:
                 clusid = cluster_index[value]
                 clusdict[clusid].append(corrdict[node][value])
+            except KeyError:
+                pass
         closest_cluster = list(set(bestcluster))[np.argmax([np.mean(clusdict[x]) for x in clusdict])]
         cluster_index[node] = closest_cluster
     return cluster_index
