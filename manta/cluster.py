@@ -161,7 +161,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     scores['random'] = (sparsity_score(graph, randomclust, rev_index))
     sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']) + '\n')
     sys.stdout.flush()
-    bestcluster = None
+    bestclusters = dict()
     clusnum = min_clusters
     scoremat_index = rev_index.copy()
     outliers = dict()
@@ -195,6 +195,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
                 scoremat_index = rev_index.copy()
         else:
             scores[clusnum] = sparsity_score(graph, clusters, rev_index)
+            bestclusters[clusnum] = clusters
             sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
                              '. \n')
             sys.stdout.flush()
@@ -216,11 +217,8 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     outlier_locs = [adj_index[x] for x in outliers[topscore]]
     scoremat_index = rev_index.copy()
     clustermat = scoremat.copy()
-    for loc in outlier_locs:
-        clustermat, scoremat_index = _remove_node(loc, clustermat, scoremat_index)
-    bestcluster = AgglomerativeClustering(n_clusters=topscore).fit_predict(clustermat)
-    bestcluster = bestcluster + 1
-    # cluster assignment 0 is reserved for fuzzy clusters
+    clustermat, scoremat_index = _remove_node(outlier_locs, clustermat, scoremat_index)
+    bestcluster = bestclusters[topscore]
     # we need to assign outlier nodes to clusters after clustering on main network
     corrdict = _path_weights(outliers[topscore], graph)
     scoremat_index = {v: k for k, v in scoremat_index.items()}
@@ -510,20 +508,27 @@ def _remove_node(loc, mat, mat_index):
     """
     Given an outlier node to remove,
     this function updates the matrix and matrix index.
-    :param loc: Node to remove
+    :param loc: Node(s) to remove
     :param mat: Scoring matrix
     :param mat_index: Matrix index
     :return: Tuple of  matrix and matrix_index
     """
-    mat_index.pop(loc)
-    # need mat_index remove last key if this is not the clusloc
-    if loc != (len(mat_index)):
-        for remainder in range(loc, len(mat_index)):
-            mat_index[remainder] = mat_index[remainder + 1]
-        mat_index.pop(len(mat_index) - 1)
-    # update scoring matrix with removed nodes
     mat = np.delete(mat, loc, axis=0)
     mat = np.delete(mat, loc, axis=1)
+    if type(loc) == list:
+        loc.sort()
+    else:
+        loc = [loc]
+    for i in range(len(loc)):
+        item = loc[i]
+        mat_index.pop(item)
+        # need mat_index remove last key if this is not the clusloc
+        if item != (len(mat_index)):
+            for remainder in range(item, len(mat_index)):
+                mat_index[remainder] = mat_index[remainder + 1]
+            mat_index.pop(len(mat_index) - 1)
+            loc = [x - 1 for x in loc]
+    # update scoring matrix with removed nodes
     return mat, mat_index
 
 

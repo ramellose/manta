@@ -82,8 +82,8 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
         permutation = rewire_graph(graph, error)
         adj = diffusion(graph=permutation, iterations=3, norm=False, msg=False)[0]
         perms.append(adj)
-        sys.stdout.write('Permutation ' + str(i) + '\n')
-        sys.stdout.flush()
+        # sys.stdout.write('Permutation ' + str(i) + '\n')
+        # sys.stdout.flush()
     posmatches = dict()
     negmatches = dict()
     for hub in pos:
