@@ -48,7 +48,14 @@ def rewire_graph(graph, error):
     """
     model = graph.copy()
     swaps = len(model.nodes) * error
-    nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
+    swapfail = False
+    try:
+        nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
+    except nx.exception.NetworkXAlgorithmError:
+        sys.stdout.write('Cannot permute this network fraction. ' + '\n' +
+                         'Please choose a lower error parameter, or avoid calculating a centrality score. ' + '\n')
+        sys.stdout.flush()
+        swapfail = True
     model = nx.to_undirected(model)
     edge_weights = list()
     for edge in graph.edges:
@@ -57,7 +64,7 @@ def rewire_graph(graph, error):
     for edge in model.edges:
         random_weights[edge] = choice(edge_weights)
     nx.set_edge_attributes(model, random_weights, 'weight')
-    return model
+    return model, swapfail
 
 
 def perm_graph(graph, permutations, percentile, pos, neg, error):
@@ -79,7 +86,9 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
     """
     perms = list()
     for i in range(permutations):
-        permutation = rewire_graph(graph, error)
+        permutation, swapfail = rewire_graph(graph, error)
+        if swapfail:
+            return
         adj = diffusion(graph=permutation, iterations=3, norm=False, msg=False)[0]
         perms.append(adj)
         # sys.stdout.write('Permutation ' + str(i) + '\n')

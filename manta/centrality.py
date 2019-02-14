@@ -62,16 +62,16 @@ def central_edge(graph, percentile, permutations, error):
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'negative hub'
-        if permutations > 0:
+        if permutations > 0 and score is not None:
             edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
     for edge in poshubs:
         node1 = list(graph.nodes)[edge[0]]
         node2 = list(graph.nodes)[edge[1]]
         edge_vals[(node1, node2)] = 'positive hub'
-        if permutations > 0:
+        if permutations > 0 and score is not None:
             edge_scores[(node1, node2)] = score[(adj_index[node1], adj_index[node2])]
     nx.set_edge_attributes(graph, values=edge_vals, name='hub')
-    if permutations > 0:
+    if permutations > 0 and score is not None:
         nx.set_edge_attributes(graph, values=edge_scores, name='reliability score')
 
 
