@@ -19,7 +19,7 @@ import networkx as nx
 import json
 
 
-def read_cyjson(filename):
+def read_cyjson(filename, direction):
     """Small utility function for reading Cytoscape json files
     generated with CoNet.
 
@@ -75,7 +75,10 @@ def read_cyjson(filename):
     ident = 'id'
     if len(set([ident, name])) < 2:
         raise nx.NetworkXError('Attribute names are not unique.')
-    graph = nx.Graph()
+    if direction:
+        graph = nx.DiGraph()
+    else:
+        graph = nx.Graph()
     graph.graph = dict(data.get('data'))
     i = 0
     for d in data["elements"]["nodes"]:

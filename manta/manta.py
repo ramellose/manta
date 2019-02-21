@@ -54,12 +54,12 @@ def set_manta():
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
-                        help='Maximum number of clusters to consider in K-means clustering. ',
+                        help='Maximum number of clusters. ',
                         default=4)
     parser.add_argument('-min', '--min_clusters',
                         dest='min', type=int,
                         required=False,
-                        help='Minimum number of clusters to consider in K-means clustering. ',
+                        help='Minimum number of clusters. ',
                         default=2)
     parser.add_argument('-iter', '--iterations',
                         dest='iter', type=int,
@@ -103,11 +103,11 @@ def set_manta():
                         help='Edge scale used to separate out fuzzy clusters. '
                              'The larger the edge scale, the larger the fuzzy cluster.',
                         default=0.5)
-    parser.add_argument('-fuzzy', '--fuzzy_nodes',
-                        dest='fuzzy',
-                        required=False,
-                        help='If set to True, fuzzy nodes are separated from the clusters. ',
-                        default=True)
+    parser.add_argument('-dir', '--direction',
+                        dest='direction',
+                        required=False, type=bool,
+                        help='If set to True, the graph is imported as a directed graph. ',
+                        default=False)
     return parser
 
 
@@ -134,12 +134,18 @@ def main():
         sys.stdout.flush()
         exit()
     # first need to convert network to undirected
-    network = nx.to_undirected(network)
+    if args['direction']:
+        if extension == 'txt':
+            sys.stdout.write('Directed networks from edge lists not supported, use graphml or cyjs!. ' + '\n')
+            sys.stdout.flush()
+            exit()
+    else:
+        network = nx.to_undirected(network)
     nonfuzzy = False
     clustered = clus_central(network, limit=args['limit'],
                              max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
-                             edgescale=args['edgescale'], central=args['central'], percentile=args['p'], permutations=args['perm'],
-                             error=args['error'], fuzzy=args['fuzzy'])
+                             edgescale=args['edgescale'], central=args['central'], percentile=args['p'],
+                             permutations=args['perm'], error=args['error'])
     layout = None
     if args['layout']:
         layout = generate_layout(clustered, args['tax'])
@@ -159,7 +165,7 @@ def main():
 
 
 def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.1,
-                 central=True, percentile=10, permutations=100, error=0.1, fuzzy=True):
+                 central=True, percentile=10, permutations=100, error=0.1):
     """
     Main function that carries out graph clustering and calculates centralities.
     :param graph: NetworkX graph to cluster. Needs to have edge weights.
@@ -177,7 +183,7 @@ def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, 
     """
     results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
                             min_clusters=min_clusters, iterations=iterations,
-                            edgescale=edgescale, fuzzy=fuzzy, permutations=permutations)
+                            edgescale=edgescale, permutations=permutations)
     graph = results[0]
     if central:
         central_edge(graph, percentile=percentile,

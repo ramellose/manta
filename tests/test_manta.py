@@ -77,7 +77,7 @@ class TestMain(unittest.TestCase):
     Tests whether the main clustering function properly assigns cluster IDs.
     """
 
-    def test_default_manca(self):
+    def test_default_manta(self):
         """
         Checks whether the main function carries out both clustering and centrality estimates.
         """
@@ -86,7 +86,7 @@ class TestMain(unittest.TestCase):
         hubs = nx.get_edge_attributes(clustered_graph, 'hub')
         self.assertGreater(len(hubs), 0)
 
-    def test_center_manca(self):
+    def test_center_manta(self):
         """
         Checks if the edge between 1 and 2 is identified as a positive hub.
 
@@ -110,7 +110,7 @@ class TestMain(unittest.TestCase):
         central_node(graph)
         self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
 
-    def test_cluster_manca(self):
+    def test_cluster_manta(self):
         """Checks whether the correct cluster IDs are assigned. """
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, iterations, edgescale=0.5)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')

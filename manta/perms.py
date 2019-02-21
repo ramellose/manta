@@ -46,7 +46,7 @@ def rewire_graph(graph, error):
     :param error: Fraction of edges to rewire.
     :return: Rewired NetworkX graph
     """
-    model = graph.copy()
+    model = nx.to_undirected(graph.copy())
     swaps = len(model.nodes) * error
     swapfail = False
     try:
