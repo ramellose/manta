@@ -10,10 +10,6 @@ as well as nodes that share neighbours.
 The function uses this alternative edge weight to run the Fruchterman-Reingold force-directed algorithm.
 This algorithm is run once per cluster.
 The generated layouts are then rotated depending on the number of clusters and combined.
-
-Currently, there is no scale implemented to prevent overlapping clusters for larger networks with multiple clusters.
-Hence, the coordinates of the clusters are now rotated on a 2,2 box;
-scaling this box could prevent overlapping clusters.
 """
 
 __author__ = 'Lisa Rottjers'

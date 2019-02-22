@@ -1,67 +1,70 @@
 #!/usr/bin/env python
 
 """
-    ::
+manta: microbial association network clustering toolbox.
+The script takes a weighted and undirected network as input
+and uses this to generate network clusters and calculate network centrality.
+Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
+Detailed explanations are available in the headers of each file.
 
-        *manta*: microbial association network clustering toolbox.
-        The script takes a weighted and undirected network as input
-        and uses this to generate network clusters and calculate network centrality.
-        Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
-        Detailed explanations are available in the headers of each file.
+The arguments for *manta* can be separated into 4 groups:
 
-        The arguments for *manta* can be separated into 4 groups:
-        * Arguments for importing and exporting data.
-        * Arguments for network clustering.
-        * Arguments for network clustering on flip-flopping networks.
-        * Arguments for network centralities.
+* Arguments for importing and exporting data.
+*  Arguments for network clustering.
+* Arguments for network clustering on flip-flopping networks.
+* Arguments for network centralities.
 
-        The arguments for importing and exporting data include:
-        * -i Filepath to input network.
-        * -o Filepath to output network
-        * -f Filetype for output network
-        * -tax Filepath to taxonomy table.
-        * --layout If flagged, a layout is generated
-        * -dir If a directed network is imported, setting this to True converts the network to undirected.
+The arguments for importing and exporting data include:
 
-        *manta* uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
-        These tables can be used to generate a layout for cyjson files.
-        Other file formats do not export layout coordinates.
+* -i Filepath to input network.
+* -o Filepath to output network
+* -f Filetype for output network
+* -tax Filepath to taxonomy table.
+* --layout If flagged, a layout is generated
+* -dir If a directed network is imported, setting this to True converts the network to undirected.
 
-        The arguments for network clustering include:
-        * -min Minimum cluster number
-        * -max Maximum cluster number
-        * -limit Error limit until convergence is considered reached
-        * -iter Number of iterations to keep going if convergence is not reached
+manta uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
+These tables can be used to generate a layout for cyjson files.
+Other file formats do not export layout coordinates.
 
-        *manta* uses agglomerative clustering on a scoring matrix to assign cluster identities.
-        The scoring matrix is generated through a procedure involving network flow.
-        Nodes that cluster separately are removed and combined with identified clusters later on.
-        Hence, *manta* will not identify clusters of only 1 node.
-        It is highly likely that networks will not converge neatly.
-        In that case, *manta* will apply the network flow procedure on a subset of the network.
+The arguments for network clustering include:
 
-        The arguments for network clustering on flip-flopping networks include:
-        * -perm Number of permutations on network subsets
-        * -ratio Ratio of edges that need to be positive or negative to consider the edges stable through permutations.
-        * -scale Threshold for shortest path products to oscillators.
+* -min Minimum cluster number
+* -max Maximum cluster number
+* -limit Error limit until convergence is considered reached
+* -iter Number of iterations to keep going if convergence is not reached
 
-        The network flow procedure relies on the following assumption:
-        positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
-        The same is assumed for negative positions.
-        The ratio defines which positions are considered mostly positive or mostly negative.
+manta uses agglomerative clustering on a scoring matrix to assign cluster identities.
+The scoring matrix is generated through a procedure involving network flow.
+Nodes that cluster separately are removed and combined with identified clusters later on.
+Hence, manta will not identify clusters of only 1 node.
+It is highly likely that networks will not converge neatly.
+In that case, manta will apply the network flow procedure on a subset of the network.
 
-        After this partial network flow procedure, oscillating nodes can be used to identify nodes that do not belong to clusters.
-        The -scale argument defines a threshold for this separation.
+The arguments for network clustering on flip-flopping networks include:
 
-        The arguments for network centralities include:
-        * --central If flagged, centrality values are calculated.
-        * -rel Number of permutations for reliability calculations.
-        * -p Percentile of central nodes returned.
-        * -e Fraction of edges to rewire for reliability calculations.
+* -perm Number of permutations on network subsets
+* -ratio Ratio of edges that need to be positive or negative to consider the edges stable through permutations.
+* -scale Threshold for shortest path products to oscillators.
 
-        Centrality values are based on a derivation of the network flow procedure.
-        This derivation does not include normalization, and therefore closely resembles a branching process.
-        To establish robustness of centrality scores to errors, the scores are also calculated on permuted networks.
+The network flow procedure relies on the following assumption:
+positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
+The same is assumed for negative positions.
+The ratio defines which positions are considered mostly positive or mostly negative.
+
+After this partial network flow procedure, oscillating nodes can be used to identify nodes that do not belong to clusters.
+The -scale argument defines a threshold for this separation.
+
+The arguments for network centralities include:
+
+* --central If flagged, centrality values are calculated.
+* -rel Number of permutations for reliability calculations.
+* -p Percentile of central nodes returned.
+* -e Fraction of edges to rewire for reliability calculations.
+
+Centrality values are based on a derivation of the network flow procedure.
+This derivation does not include normalization, and therefore closely resembles a branching process.
+To establish robustness of centrality scores to errors, the scores are also calculated on permuted networks.
 
 """
 

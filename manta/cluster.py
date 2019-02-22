@@ -1,15 +1,21 @@
 #!/usr/bin/env python
 
 """
-The clustering algorithm works in several steps. First, an empty adjacency matrix is instantiated.
-Then, the following steps are carried out until sparsity has stabilized:
+The clustering algorithm works in several steps to generate cluster assignments.
 
-1. Raise the matrix to power 2
-2. Normalize matrix by absolute maximum value
-3. Add 1 / value for each value in matrix
-4. Normalize matrix by absolute maximum value
-5. Calculate error by subtracting previous matrix from current matrix
-6. If error threshold is reached, the algorithm stops
+1. Generate a scoring matrix using a network flow strategy
+2. Cluster on the scoring matrix.
+3. In case the network displays memory effects, define fuzzy nodes.
+
+The scoring matrix is first clustered with the AgglomerativeClustering algorithm.
+Because the network flow strategy can result in central values being separated from the clusters,
+agglomerative clustering is repeated on score matrices with removed high-scoring nodes
+until larger clusters are identified.
+After this step, clustering assignments are  set.
+However, if the network caused the scoring matrix to enter a flip-flop state,
+nodes can still be defined as 'fuzzy'.
+In this case, manta uses a shortest path strategy to assess whether nodes belong to a cluster
+or are in conflict with the cluster oscillator.
 
 """
 
@@ -24,7 +30,7 @@ import numpy as np
 # from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
-from manta.perms import diffusion, partial_diffusion
+from manta.flow import diffusion, partial_diffusion
 from itertools import combinations, chain
 from copy import deepcopy
 
@@ -32,14 +38,9 @@ from copy import deepcopy
 def cluster_graph(graph, limit, max_clusters, min_clusters,
                   iterations, ratio, edgescale, permutations, verbose):
     """
-    Takes a networkx graph
-    and carries out network clustering until
-    sparsity results converge. Directionality is ignored;
-    if weight is available, this is considered during the diffusion process.
-
-
-    The min / max values that are the result of the diffusion process
-    are used as a centrality measure and define positive as well as negative hub species.
+    Takes a networkx graph and carries out network clustering.
+    The returned graph contains cluster assignments and fuzzy assignments.
+    If weight is available, this is considered during the diffusion process.
 
     Parameters
     ----------
@@ -80,16 +81,17 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters, min_clusters=min_clusters, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
-    fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
-                                edgescale=edgescale,
-                                adj_index=adj_index, rev_index=rev_index, verbose=verbose)
-    fuzzy_dict = dict()
-    for node in graph.nodes:
-        if adj_index[node] in fuzzy_nodes:
-            fuzzy_dict[node] = 'Fuzzy'
-        else:
-            fuzzy_dict[node] = 'Sharp'
-        nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
+    if memory:
+        fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
+                                    edgescale=edgescale,
+                                    adj_index=adj_index, rev_index=rev_index, verbose=verbose)
+        fuzzy_dict = dict()
+        for node in graph.nodes:
+            if adj_index[node] in fuzzy_nodes:
+                fuzzy_dict[node] = 'Fuzzy'
+            else:
+                fuzzy_dict[node] = 'Sharp'
+            nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
     nx.set_node_attributes(graph, values=bestcluster, name='cluster')
     return graph, scoremat
 
@@ -155,8 +157,10 @@ def sparsity_score(graph, clusters, rev_index):
 def cluster_hard(graph, adj_index, rev_index, scoremat,
                  max_clusters, min_clusters, verbose):
     """
-    If no memory effects are demonstrated, clusters can be identified
-    without fuzzy clustering.
+    Agglomerative clustering is used to separate nodes based on the scoring matrix.
+    Because the scoring matrix generally results in separation of 'central' nodes,
+    these nodes are removed and clustering is repeated until larger clusters are identified.
+    Afterwards, the nodes are assigned to clusters based on a shortest path strategy.
 
     Parameters
     ----------
@@ -268,9 +272,11 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
 
 def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose):
     """
-    If a memory effect is demonstrated to exist during
-    matrix diffusion, the fuzzy clustering algorithm assigns
-    cluster identity based on multiple diffusion steps.
+    Although clusters can be assigned with cluster_hard, cluster_fuzzy tests
+    whether cluster assignments are in conflict with oscillator nodes present in clusters.
+
+    Oscillators can only be defined from flip-flopping states;
+    hence, this function should not be called for scoring matrices that converge to -1 and 1.
 
     Parameters
     ----------
@@ -576,7 +582,7 @@ def _remove_node(loc, mat, mat_index):
 def _cluster_vector(assignment, adj_index):
     """
     Given a dictionary of cluster assignments,
-    this helper function returns a vector with cluster IDs
+    this helper function returns a vector with cluster IDs.
 
     Parameters
     ----------
