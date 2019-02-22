@@ -35,6 +35,9 @@ def generate_layout(graph, tax=None):
     where a layout is calculated for each of the clusters specified
     in the supplied NetworkX graph. These layouts are then shifted and combined
     into a full layout.
+
+    Parameters
+    ----------
     :param graph: NetworkX graph with cluster IDs
     :param tax: Filepath to tab-delimited taxonomy table.
     :return: dictionary of layout coordinates
@@ -101,6 +104,9 @@ def generate_tax_weights(graph, tax):
     The more similar nodes are, the larger their similarity score is;
     hence, force-directed layouts will place such nodes closer together.
     Assumes that species assignments of NA or None are not relevant.
+
+    Parameters
+    ----------
     :param graph: NetworkX graph
     :param tax: Taxonomy table
     :return:

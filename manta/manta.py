@@ -1,11 +1,68 @@
 #!/usr/bin/env python
 
 """
-manta: microbial association network clustering toolbox.
-The script takes a weighted and undirected network as input
-and uses this to generate network clusters and calculate network centrality.
-Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
-Detailed explanations are available in the headers of each file.
+    ::
+
+        *manta*: microbial association network clustering toolbox.
+        The script takes a weighted and undirected network as input
+        and uses this to generate network clusters and calculate network centrality.
+        Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
+        Detailed explanations are available in the headers of each file.
+
+        The arguments for *manta* can be separated into 4 groups:
+        * Arguments for importing and exporting data.
+        * Arguments for network clustering.
+        * Arguments for network clustering on flip-flopping networks.
+        * Arguments for network centralities.
+
+        The arguments for importing and exporting data include:
+        * -i Filepath to input network.
+        * -o Filepath to output network
+        * -f Filetype for output network
+        * -tax Filepath to taxonomy table.
+        * --layout If flagged, a layout is generated
+        * -dir If a directed network is imported, setting this to True converts the network to undirected.
+
+        *manta* uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
+        These tables can be used to generate a layout for cyjson files.
+        Other file formats do not export layout coordinates.
+
+        The arguments for network clustering include:
+        * -min Minimum cluster number
+        * -max Maximum cluster number
+        * -limit Error limit until convergence is considered reached
+        * -iter Number of iterations to keep going if convergence is not reached
+
+        *manta* uses agglomerative clustering on a scoring matrix to assign cluster identities.
+        The scoring matrix is generated through a procedure involving network flow.
+        Nodes that cluster separately are removed and combined with identified clusters later on.
+        Hence, *manta* will not identify clusters of only 1 node.
+        It is highly likely that networks will not converge neatly.
+        In that case, *manta* will apply the network flow procedure on a subset of the network.
+
+        The arguments for network clustering on flip-flopping networks include:
+        * -perm Number of permutations on network subsets
+        * -ratio Ratio of edges that need to be positive or negative to consider the edges stable through permutations.
+        * -scale Threshold for shortest path products to oscillators.
+
+        The network flow procedure relies on the following assumption:
+        positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
+        The same is assumed for negative positions.
+        The ratio defines which positions are considered mostly positive or mostly negative.
+
+        After this partial network flow procedure, oscillating nodes can be used to identify nodes that do not belong to clusters.
+        The -scale argument defines a threshold for this separation.
+
+        The arguments for network centralities include:
+        * --central If flagged, centrality values are calculated.
+        * -rel Number of permutations for reliability calculations.
+        * -p Percentile of central nodes returned.
+        * -e Fraction of edges to rewire for reliability calculations.
+
+        Centrality values are based on a derivation of the network flow procedure.
+        This derivation does not include normalization, and therefore closely resembles a branching process.
+        To establish robustness of centrality scores to errors, the scores are also calculated on permuted networks.
+
 """
 
 __author__ = 'Lisa Rottjers'
@@ -23,7 +80,7 @@ from manta.layout import generate_layout
 
 
 def set_manta():
-    """This parser gets input settings for running the manta clustering algorithm.
+    """This parser gets input settings for running the *manta* clustering algorithm.
     Apart from the parameters specified by cluster_graph,
     it requires an input format that can be read by networkx."""
     parser = argparse.ArgumentParser(
@@ -52,6 +109,10 @@ def set_manta():
                              'If the taxonomy table is already included as node properties in the input network,'
                              'these node properties are used instead. ',
                         default=None)
+    parser.add_argument('--layout', dest='layout', action='store_true',
+                        help='With this flag, layout coordinates are calculated for the network. '
+                             'Only compatible with .cyjs output. ', required=False),
+    parser.set_defaults(layout=False)
     parser.add_argument('-min', '--min_clusters',
                         dest='min', type=int,
                         required=False,
@@ -62,10 +123,6 @@ def set_manta():
                         required=False,
                         help='Maximum number of clusters. ',
                         default=4)
-    parser.add_argument('--layout', dest='layout', action='store_true',
-                        help='With this flag, layout coordinates are calculated for the network. '
-                             'Only compatible with .cyjs output. ', required=False),
-    parser.set_defaults(layout=False)
     parser.add_argument('-limit', '--convergence_limit',
                         dest='limit', type=float,
                         required=False,
@@ -77,6 +134,24 @@ def set_manta():
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
                         default=10)
+    parser.add_argument('-perm', '--permutation',
+                        dest='perm', type=int,
+                        required=False,
+                        help='Number of permutation iterations for '
+                             'network subsetting during partial iterations. ',
+                        default=100)
+    parser.add_argument('-ratio', '--stability_ratio',
+                        dest='ratio', type=float,
+                        required=False,
+                        help='Fraction of scores that need to be positive or negative'
+                             'for edge scores to be considered stable. ',
+                        default=0.7)
+    parser.add_argument('-scale', '--edgescale',
+                        dest='edgescale', type=int,
+                        required=False,
+                        help='Edge scale used to separate out fuzzy clusters. '
+                             'The larger the edge scale, the larger the fuzzy cluster.',
+                        default=0.5)
     parser.add_argument('-c, --central', dest='central', action='store_true',
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
@@ -97,24 +172,6 @@ def set_manta():
                         required=False,
                         help='Fraction of edges to rewire for reliability tests. ',
                         default=0.1)
-    parser.add_argument('-perm', '--permutation',
-                        dest='perm', type=int,
-                        required=False,
-                        help='Number of permutation iterations for '
-                             'network subsetting during partial iterations. ',
-                        default=100)
-    parser.add_argument('-ratio', '--stability_ratio',
-                        dest='ratio', type=float,
-                        required=False,
-                        help='Fraction of scores that need to be positive or negative'
-                             'for edge scores to be considered stable. ',
-                        default=0.7)
-    parser.add_argument('-scale', '--edgescale',
-                        dest='edgescale', type=int,
-                        required=False,
-                        help='Edge scale used to separate out fuzzy clusters. '
-                             'The larger the edge scale, the larger the fuzzy cluster.',
-                        default=0.5)
     parser.add_argument('-dir', '--direction',
                         dest='direction',
                         required=False, type=bool,

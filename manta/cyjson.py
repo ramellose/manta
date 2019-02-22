@@ -23,6 +23,8 @@ def read_cyjson(filename, direction):
     """Small utility function for reading Cytoscape json files
     generated with CoNet.
 
+    Parameters
+    ----------
     :param filename: Filepath to location of cyjs file.
     :return: NetworkX graph.
 
@@ -67,7 +69,7 @@ def read_cyjson(filename, direction):
        DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
        THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
        (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     """
     with open(filename) as f:
         data = json.load(f)
@@ -117,6 +119,8 @@ def write_cyjson(filename, graph, layout=None):
     """Small utility function for writing Cytoscape json files.
     Also accepts a layout dictionary to add to the file.
 
+    Parameters
+    ----------
     :param filename: Filepath to location of cyjs file.
     :param graph: NetworkX graph to write to disk.
     :param layout: Dictionary of layout coordinates that is written to cyjs file.
@@ -163,7 +167,7 @@ def write_cyjson(filename, graph, layout=None):
        DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
        THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
        (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     """
     name = 'name'
     ident = 'id'

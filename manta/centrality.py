@@ -84,6 +84,9 @@ def central_node(graph):
     The p-value is calculated with a binomial test.
     Edge sign is ignored; hubs can have both positive and negative
     edges.
+
+    Parameters
+    ----------
     :param graph: NetworkX graph with edge centrality scores assigned
     :return: NetworkX graph with hub centrality for nodes
     """

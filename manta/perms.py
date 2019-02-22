@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-The centrality scores generated from cluster_sparse are tested for their robustness.
+Centrality scores can be tested for their reliability.
 The idea behind this test is that random rewiring should, to some extent,
 preserve the most central structures of the original graph.
 We cannot know which edges are true positives and which ones are false positives,
@@ -42,6 +42,9 @@ def rewire_graph(graph, error):
     Because this does not take negative / positive hubs into account,
     the fraction of positive / negative weights per node
     is not preserved.
+
+    Parameters
+    ----------
     :param graph: Original graph to rewire.
     :param error: Fraction of edges to rewire.
     :return: Rewired NetworkX graph
@@ -76,6 +79,9 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
     Frantz, T. L., & Carley, K. M. (2017).
     Reporting a network’s most-central actor with a confidence level.
     Computational and Mathematical Organization Theory, 23(2), 301-312.
+
+    Parameters
+    ----------
     :param graph: NetworkX graph of a microbial association network.
     :param permutations: Number of permutations to carry out. If 0, no bootstrapping is done.
     :param percentile: Determines percentile of hub species to return.
@@ -133,6 +139,8 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     If a memory effect is detected, not the outcome matrix but the first iteration is returned.
     Additionally, 5 iterations after the flip-flop state has been reached are calculated.
 
+    Parameters
+    ----------
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
@@ -238,6 +246,9 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     or enter a flip-flopping state.
     A partial diffusion process can still discover relationships
     between unlinked taxa when this is not possible.
+
+    Parameters
+    ----------
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
