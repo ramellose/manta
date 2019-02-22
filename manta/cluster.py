@@ -29,7 +29,8 @@ from itertools import combinations, chain
 from copy import deepcopy
 
 
-def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescale, permutations=100):
+def cluster_graph(graph, limit, max_clusters, min_clusters,
+                  iterations, ratio, edgescale, permutations, verbose):
     """
     Takes a networkx graph
     and carries out network clustering until
@@ -47,8 +48,10 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param iterations: If algorithm does not converge, it stops here.
+    :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param edgescale: Mean edge weight for node removal
-    :param fuzzy: If true, fuzzy nodes are identified
+    :param permutations: Number of permutations for partial iterations
+    :param verbose: Verbosity level of function
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
     adj_index = dict()
@@ -59,23 +62,27 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, iterations, edgescal
     # cluster number is defined through gap statistic
     # max cluster number to test is by default 5
     # define topscore and bestcluster for no cluster
-    scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations)
-    if memory or convergence:
-        sys.stdout.write("Convergence detected. Switching to partial diffusion. \n")
-        sys.stdout.flush()
+    scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+    if (memory or convergence) and not nx.is_directed(graph):
+        # partial diffusion results in unclosed graphs for directed graphs,
+        # and can therefore not be used here.
+        if verbose:
+            sys.stdout.write("Memory effect or convergence to 0 detected. Switching to partial diffusion. \n")
+            sys.stdout.flush()
         # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
-        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, ratio=0.7, permutations=permutations)
+        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations,
+                                               ratio=ratio, permutations=permutations, verbose=verbose)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if K-means can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
     #if not memory:
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
-                               max_clusters=max_clusters, min_clusters=min_clusters)
+                               max_clusters=max_clusters, min_clusters=min_clusters, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
     fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
                                 edgescale=edgescale,
-                                adj_index=adj_index, rev_index=rev_index)
+                                adj_index=adj_index, rev_index=rev_index, verbose=verbose)
     fuzzy_dict = dict()
     for node in graph.nodes:
         if adj_index[node] in fuzzy_nodes:
@@ -142,7 +149,8 @@ def sparsity_score(graph, clusters, rev_index):
     return sparsity
 
 
-def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_clusters):
+def cluster_hard(graph, adj_index, rev_index, scoremat,
+                 max_clusters, min_clusters, verbose):
     """
     If no memory effects are demonstrated, clusters can be identified
     without fuzzy clustering.
@@ -152,13 +160,15 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     :param scoremat: Converged diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
+    :param verbose: Verbosity level of function
     :return: Dictionary of nodes with cluster assignments
     """
     randomclust = np.random.randint(2, size=len(scoremat))
     scores = dict()
     scores['random'] = (sparsity_score(graph, randomclust, rev_index))
-    sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']) + '\n')
-    sys.stdout.flush()
+    if verbose:
+        sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']) + '\n')
+        sys.stdout.flush()
     bestclusters = dict()
     clusnum = min_clusters
     scoremat_index = rev_index.copy()
@@ -194,9 +204,10 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
         else:
             scores[clusnum] = sparsity_score(graph, clusters, rev_index)
             bestclusters[clusnum] = clusters
-            sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
-                             '. \n')
-            sys.stdout.flush()
+            if verbose:
+                sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
+                                 '. \n')
+                sys.stdout.flush()
             clusnum += 1
             outliers[clusnum] = list()
             # reset scoring matrix in case different cluster assignment does assign outliers
@@ -204,12 +215,14 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
             scoremat_index = rev_index.copy()
     topscore = max(scores, key=scores.get)
     if topscore != 'random':
-        sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
-        sys.stdout.flush()
+        if verbose:
+            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
+            sys.stdout.flush()
     else:
-        sys.stdout.write(
-            'Warning: random clustering performed best. \n Setting cluster amount to minimum value. \n')
-        sys.stdout.flush()
+        if verbose:
+            sys.stdout.write('Warning: random clustering performed best.'
+                             ' \n Setting cluster amount to minimum value. \n')
+            sys.stdout.flush()
         topscore = min_clusters
     # given a topscore, clustering is carried out on scoremat without outliers
     outlier_locs = [adj_index[x] for x in outliers[topscore]]
@@ -218,7 +231,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     clustermat, scoremat_index = _remove_node(outlier_locs, clustermat, scoremat_index)
     bestcluster = bestclusters[topscore]
     # we need to assign outlier nodes to clusters after clustering on main network
-    corrdict = _path_weights(outliers[topscore], graph)
+    corrdict = _path_weights(outliers[topscore], graph, verbose)
     scoremat_index = {v: k for k, v in scoremat_index.items()}
     # generate dictionary of cluster assignments
     # use this to reconstruct bestcluster vector
@@ -247,7 +260,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat, max_clusters, min_cluste
     return cluster_index
 
 
-def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index):
+def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose):
     """
     If a memory effect is demonstrated to exist during
     matrix diffusion, the fuzzy clustering algorithm assigns
@@ -258,6 +271,7 @@ def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index):
     :param edgescale: Mean edge weight for node removal
     :param adj_index: Node index
     :param rev_index: Reverse node index
+    :param verbose: Verbosity level of function
     :return: Vector with cluster assignments
     """
     # clustering on the 1st iteration already yields reasonable results
@@ -269,20 +283,21 @@ def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index):
     #bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
     #                           max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     # cluster assignment 0 is reserved for fuzzy clusters
-    sys.stdout.write('Determining fuzzy nodes. \n')
-    sys.stdout.flush()
+    if verbose:
+        sys.stdout.write('Determining fuzzy nodes. \n')
+        sys.stdout.flush()
     # diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge
     # each timeseries is 5 flip-flops long
     diffs = np.array(diffs)
     # only upper triangle of matrix is indexed this way
     core, anti = _core_oscillators(difmats=diffs, assignment=cluster,
-                                   adj_index=adj_index, rev_index=rev_index)
+                                   adj_index=adj_index, rev_index=rev_index, verbose=verbose)
     # for each node with contrasting edge products,
     # we can check whether the sparsity score is improved by
     # removing the node or adding it to another cluster.
     remove_cluster = _oscillator_paths(graph=graph, core_oscillators=core,
                                        anti_corrs=anti, assignment=cluster,
-                                       adj_index=adj_index, edgescale=edgescale)
+                                       adj_index=adj_index, edgescale=edgescale, verbose=verbose)
 
     # we only remove nodes with conflicting shortest paths if
     # they have a large impact on sparsity score
@@ -312,7 +327,7 @@ def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index):
     return remove_cluster
 
 
-def _core_oscillators(difmats, assignment, adj_index, rev_index):
+def _core_oscillators(difmats, assignment, adj_index, rev_index, verbose):
     """
     Given a list of diffusion matrices calculated during a flip-flop state,
     this function identifies core oscillators as well as their anti-correlated partners.
@@ -320,6 +335,7 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index):
     :param assignment: Cluster assignment
     :param adj_index: Dictionary for indexing
     :param rev_index: Dictionary for indexing
+    :param verbose: Verbosity level of function
     :return: Tuple with list of oscillators and dictionary of anti-correlated oscillators
     """
     oscillators = list()
@@ -335,8 +351,9 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index):
             oscillators.append(index)
             oscillators_series.append(seq)
     oscillators = [rev_index[x] for x in oscillators]
-    sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
-    sys.stdout.flush()
+    if verbose:
+        sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
+        sys.stdout.flush()
     amplis = dict()
     clusdict = dict.fromkeys(oscillators)
     for x in clusdict:
@@ -385,7 +402,8 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index):
     return core_oscillators, anti_corrs
 
 
-def _oscillator_paths(graph, core_oscillators, anti_corrs, assignment, adj_index, edgescale):
+def _oscillator_paths(graph, core_oscillators, anti_corrs,
+                      assignment, adj_index, edgescale, verbose):
     """
     Given optimal cluster assignments and a set of core oscillators,
     this function computes paths to / from oscillators and identifies nodes
@@ -397,10 +415,11 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs, assignment, adj_index
     :param assignment: Cluster assignment
     :param adj_index: Dictionary for indexing
     :param edgescale: Threshold for node removal
+    :param verbose: Verbosity level of function
     :return: List of node indices that are in conflict with oscillators
     """
     # get all shortest paths to/from oscillators
-    corrdict = _path_weights(core_oscillators, graph)
+    corrdict = _path_weights(core_oscillators, graph, verbose)
     varweights = list()  # stores nodes that have low weights of mean shortest paths
     clus_matches = list()  # stores nodes that have matching signs for oscillators
     clus_assign = list()  # stores nodes that have negative shortest paths to cluster oscillator
@@ -434,13 +453,14 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs, assignment, adj_index
         except KeyError:
             pass
             # cannot check oscillator sign for clusters w/o oscillators
-    sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
-                     str(clus_assign) + '\n' +
-                     'Mean edge products are small for: \n' +
-                     str(varweights) + '\n' +
-                     'Mean edge products are not the opposite sign for opposing oscillators: \n' +
-                     str(clus_matches) + '\n')
-    sys.stdout.flush()
+    if verbose:
+        sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
+                         str(clus_assign) + '\n' +
+                         'Mean edge products are small for: \n' +
+                         str(varweights) + '\n' +
+                         'Mean edge products are not the opposite sign for opposing oscillators: \n' +
+                         str(clus_matches) + '\n')
+        sys.stdout.flush()
     remove_cluster = set([adj_index[x] for x in clus_assign + varweights])
                           # + clus_matches])
     return list(remove_cluster)
@@ -463,12 +483,13 @@ def _node_sparsity(graph, removals, assignment, rev_index):
     return updated_removals
 
 
-def _path_weights(source, graph):
+def _path_weights(source, graph, verbose):
     """
     Given a list of nodes, this function returns a dictionary of all shortest path weights
     from the sources to all other nodes in the network.
     :param source: List of source nodes
     :param graph: NetworkX graph object
+    :param verbose: Verbosity level of function
     :return: Dictionary of shortest path weights
     """
     corrdict = dict.fromkeys(source)
@@ -495,8 +516,9 @@ def _path_weights(source, graph):
                     total_weight += edge_weight
                 total_weight = total_weight / len(shortest_paths)
             except nx.exception.NetworkXNoPath:
-                sys.stdout.write("Could not find shortest path for: " + target + "\n")
-                sys.stdout.flush()
+                if verbose:
+                    sys.stdout.write("Could not find shortest path for: " + target + "\n")
+                    sys.stdout.flush()
                 total_weight = -1
             corrdict[node][target] = total_weight
     return corrdict

@@ -21,7 +21,7 @@ from manta.perms import diffusion, perm_graph
 from scipy.stats import binom_test
 
 
-def central_edge(graph, percentile, permutations, error):
+def central_edge(graph, percentile, permutations, error, verbose):
     """
     The min / max values that are the result of the diffusion process
     are used as a centrality measure and define positive as well as negative hub associations.
@@ -39,9 +39,10 @@ def central_edge(graph, percentile, permutations, error):
     :param percentile: Determines percentile of hub species to return.
     :param permutations: Number of permutations to carry out. If 0, no permutation test is done.
     :param error: Fraction of edges to rewire for reliability metric.
+    :param verbose: Verbosity level of function
     :return: Networkx graph with hub ID / p-value as node property.
     """
-    scoremat = diffusion(graph, iterations=3, norm=False)[0]
+    scoremat = diffusion(graph, limit=2, iterations=3, norm=False, verbose=verbose)[0]
     negthresh = np.percentile(scoremat, percentile)
     posthresh = np.percentile(scoremat, 100-percentile)
     neghubs = list(map(tuple, np.argwhere(scoremat <= negthresh)))

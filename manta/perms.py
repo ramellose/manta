@@ -46,7 +46,7 @@ def rewire_graph(graph, error):
     :param error: Fraction of edges to rewire.
     :return: Rewired NetworkX graph
     """
-    model = nx.to_undirected(graph.copy())
+    model = graph.copy(as_view=False).to_undirected(as_view=False)
     swaps = len(model.nodes) * error
     swapfail = False
     try:
@@ -89,7 +89,7 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
         permutation, swapfail = rewire_graph(graph, error)
         if swapfail:
             return
-        adj = diffusion(graph=permutation, iterations=3, norm=False, msg=False)[0]
+        adj = diffusion(graph=permutation, limit=2, iterations=3, norm=False, verbose=False)[0]
         perms.append(adj)
         # sys.stdout.write('Permutation ' + str(i) + '\n')
         # sys.stdout.flush()
@@ -117,7 +117,7 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
     return reliability
 
 
-def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
+def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     """
     Diffusion process for generation of scoring matrix.
     The implementation of this process is similar
@@ -136,9 +136,9 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
+    :param verbose: Verbosity level of function
     :param norm: Normalize values so they converge to -1 or 1
     :param inflation: Carry out network diffusion with/without inflation
-    :param msg: If true, print error size per iteration
     :return: score matrix, memory effect, initial diffusion matrix
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
@@ -146,7 +146,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
     diffs = list()
     iters = 0
     memory = False
-    convergence = True
+    convergence = False
     error_1 = 1  # error steps 1 and 2 iterations back
     error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
     while error > limit and iters < iterations:
@@ -176,9 +176,10 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
         # this indicates the matrix is busy converging to 0
         # in that case, we do the same as with the memory effect
         if np.percentile(updated_mat, 99) < 0.00000001:
-            sys.stdout.write('Matrix converging to zero.' + '\n' +
-                             'Clustering with partial network. ' + '\n')
-            sys.stdout.flush()
+            if verbose:
+                sys.stdout.write('Matrix converging to zero.' + '\n' +
+                                 'Clustering with partial network. ' + '\n')
+                sys.stdout.flush()
             convergence = True
             break
         if inflation:
@@ -200,21 +201,23 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
                 updated_mat = updated_mat / abs(np.max(updated_mat))
         error = abs(updated_mat - scoremat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
         error = np.mean(error) * 100
-        if norm and msg:
+        if norm and verbose:
             sys.stdout.write('Current error: ' + str(error) + '\n')
             sys.stdout.flush()
         try:
             if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
                 # if there is a flip-flop state, the error will alternate between two values
-                sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
-                sys.stdout.flush()
+                if verbose:
+                    sys.stdout.write('Detected memory effect at iteration: ' + str(iters) + '\n')
+                    sys.stdout.flush()
                 memory = True
                 iterations = iters + 5
         except RuntimeWarning:
             convergence = True
-            sys.stdout.write('Matrix converged to zero.' + '\n' +
-                             'Clustering with partial network. ' + '\n')
-            sys.stdout.flush()
+            if verbose:
+                sys.stdout.write('Matrix converged to zero.' + '\n' +
+                                 'Clustering with partial network. ' + '\n')
+                sys.stdout.flush()
         error_2 = error_1
         error_1 = error
         scoremat = updated_mat
@@ -228,7 +231,7 @@ def diffusion(graph, iterations, limit=2, norm=True, inflation=True, msg=False):
     return scoremat, memory, convergence, diffs
 
 
-def partial_diffusion(graph, iterations, limit=2, ratio=0.7, permutations=100):
+def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     """
     Partial diffusion process for generation of scoring matrix.
     Some matrices may be unable to reach convergence
@@ -240,12 +243,13 @@ def partial_diffusion(graph, iterations, limit=2, ratio=0.7, permutations=100):
     :param limit: Percentage in error decrease until matrix is considered converged
     :param ratio: Ratio of positive / negative edges required for edge stability
     :param permutations: Number of permutations for network subsetting
+    :param verbose: Verbosity level of function
     :return: score matrix, memory effect, initial diffusion matrix
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
     nums = int(len(graph)/5)*4  # fraction of edges in subnetwork set to 0
     result = list()
-    subnum = 100  # number of subnetworks generated
+    subnum = permutations  # number of subnetworks generated
     for b in range(subnum):  # 100 is arbitrarily chosen
         indices = sample(range(len(graph)), nums)
         # we randomly sample from the indices and create a subgraph from this
@@ -299,7 +303,9 @@ def partial_diffusion(graph, iterations, limit=2, ratio=0.7, permutations=100):
                     try:
                         value[...] = value + (1/value)
                     except RuntimeWarning:
-                        sys.stdout.write('Warning: matrix overflow detected.' + '\n')
+                        if verbose:
+                            sys.stdout.write('Warning: matrix overflow detected.' + '\n')
+                            sys.stdout.flush()
                         break
             updated_mat = updated_mat / abs(np.max(updated_mat))
             error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
@@ -311,9 +317,10 @@ def partial_diffusion(graph, iterations, limit=2, ratio=0.7, permutations=100):
                     max_iters = iters + 5
             except RuntimeWarning:
                 convergence = True
-                sys.stdout.write('Matrix converged to zero.' + '\n' +
-                                 'Skipping this iteration. ' + '\n')
-                sys.stdout.flush()
+                if verbose:
+                    sys.stdout.write('Matrix converged to zero.' + '\n' +
+                                     'Skipping this iteration. ' + '\n')
+                    sys.stdout.flush()
             error_2 = error_1
             error_1 = error
             submat = updated_mat

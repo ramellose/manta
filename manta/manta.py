@@ -45,32 +45,6 @@ def set_manta():
                         choices=['gml', 'edgelist',
                                  'graphml', 'adj', 'cyjs'],
                         default='cyjs')
-    parser.add_argument('-limit', '--convergence_limit',
-                        dest='limit', type=float,
-                        required=False,
-                        help='The limit defines the minimum percentage decrease in error per iteration.'
-                             ' If iterations do not decrease the error anymore, the matrix is considered converged. ',
-                        default=2)
-    parser.add_argument('-max', '--max_clusters',
-                        dest='max', type=int,
-                        required=False,
-                        help='Maximum number of clusters. ',
-                        default=4)
-    parser.add_argument('-min', '--min_clusters',
-                        dest='min', type=int,
-                        required=False,
-                        help='Minimum number of clusters. ',
-                        default=2)
-    parser.add_argument('-iter', '--iterations',
-                        dest='iter', type=int,
-                        required=False,
-                        help='Number of iterations to repeat if convergence is not reached. ',
-                        default=10)
-    parser.add_argument('--central', dest='central', action='store_true',
-                        help='With this flag, centrality values are calculated for the network. ', required=False)
-    parser.set_defaults(central=False)
-    parser.add_argument('--layout', dest='layout', action='store_true',
-                        help='With this flag, layout coordinates are calculated for the network. ', required=False),
     parser.add_argument('-tax', '--taxonomy_table',
                         dest='tax',
                         help='Filepath to tab-delimited taxonomy table. '
@@ -78,7 +52,39 @@ def set_manta():
                              'If the taxonomy table is already included as node properties in the input network,'
                              'these node properties are used instead. ',
                         default=None)
+    parser.add_argument('-min', '--min_clusters',
+                        dest='min', type=int,
+                        required=False,
+                        help='Minimum number of clusters. ',
+                        default=2)
+    parser.add_argument('-max', '--max_clusters',
+                        dest='max', type=int,
+                        required=False,
+                        help='Maximum number of clusters. ',
+                        default=4)
+    parser.add_argument('--layout', dest='layout', action='store_true',
+                        help='With this flag, layout coordinates are calculated for the network. '
+                             'Only compatible with .cyjs output. ', required=False),
     parser.set_defaults(layout=False)
+    parser.add_argument('-limit', '--convergence_limit',
+                        dest='limit', type=float,
+                        required=False,
+                        help='The limit defines the minimum percentage decrease in error per iteration.'
+                             ' If iterations do not decrease the error anymore, the matrix is considered converged. ',
+                        default=2)
+    parser.add_argument('-iter', '--iterations',
+                        dest='iter', type=int,
+                        required=False,
+                        help='Number of iterations to repeat if convergence is not reached. ',
+                        default=10)
+    parser.add_argument('-c, --central', dest='central', action='store_true',
+                        help='With this flag, centrality values are calculated for the network. ', required=False)
+    parser.set_defaults(central=False)
+    parser.add_argument('-rel', '--reliability_permutations',
+                        dest='rel', type=int,
+                        required=False,
+                        help='Number of permutation iterations for centrality estimates. ',
+                        default=100)
     parser.add_argument('-p', '--percentile',
                         dest='p', type=int,
                         required=False,
@@ -86,17 +92,23 @@ def set_manta():
                              ' a percentile of 10 returns edges below the 10th and '
                              'edges above the 90th percentile. ',
                         default=10)
-    parser.add_argument('-perm', '--permutation',
-                        dest='perm', type=int,
-                        required=False,
-                        help='Number of permutation iterations for centrality estimates and '
-                             'network subsetting. ',
-                        default=100)
     parser.add_argument('-e', '--error',
                         dest='error', type=int,
                         required=False,
                         help='Fraction of edges to rewire for reliability tests. ',
                         default=0.1)
+    parser.add_argument('-perm', '--permutation',
+                        dest='perm', type=int,
+                        required=False,
+                        help='Number of permutation iterations for '
+                             'network subsetting during partial iterations. ',
+                        default=100)
+    parser.add_argument('-ratio', '--stability_ratio',
+                        dest='ratio', type=float,
+                        required=False,
+                        help='Fraction of scores that need to be positive or negative'
+                             'for edge scores to be considered stable. ',
+                        default=0.7)
     parser.add_argument('-scale', '--edgescale',
                         dest='edgescale', type=int,
                         required=False,
@@ -106,8 +118,13 @@ def set_manta():
     parser.add_argument('-dir', '--direction',
                         dest='direction',
                         required=False, type=bool,
-                        help='If set to True, the graph is imported as a directed graph. ',
+                        help='If set to False, directed graphs are converted to undirected after import. ',
                         default=False)
+    parser.add_argument('-v', '--verbose',
+                        dest='verbose',
+                        required=False, type=bool,
+                        help='Provides additional details on progress. ',
+                        default=True)
     return parser
 
 
@@ -141,55 +158,31 @@ def main():
             exit()
     else:
         network = nx.to_undirected(network)
-    nonfuzzy = False
-    clustered = clus_central(network, limit=args['limit'],
-                             max_clusters=args['max'], min_clusters=args['min'], iterations=args['iter'],
-                             edgescale=args['edgescale'], central=args['central'], percentile=args['p'],
-                             permutations=args['perm'], error=args['error'])
+    results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
+                            min_clusters=args['min'], iterations=args['iter'],
+                            ratio=args['ratio'], edgescale=args['edgescale'],
+                            permutations=args['perm'], verbose=args['verbose'])
+    graph = results[0]
+    if args['central']:
+        central_edge(graph, percentile=args['fp'], permutations=args['rel'],
+                     error=args['error'], verbose=args['verbose'])
+        central_node(graph)
     layout = None
     if args['layout']:
-        layout = generate_layout(clustered, args['tax'])
+        layout = generate_layout(graph, args['tax'])
     if args['f'] == 'graphml':
-        nx.write_graphml(clustered, args['fp'])
+        nx.write_graphml(graph, args['fp'])
     elif args['f'] == 'edgelist':
-        nx.write_weighted_edgelist(clustered, args['fp'])
+        nx.write_weighted_edgelist(graph, args['fp'])
     elif args['f'] == 'gml':
-        nx.write_gml(clustered, args['fp'])
+        nx.write_gml(graph, args['fp'])
     elif args['f'] == 'adj':
-        nx.write_multiline_adjlist(clustered, args['fp'])
+        nx.write_multiline_adjlist(graph, args['fp'])
     elif args['f'] == 'cyjs':
-        write_cyjson(graph=clustered, filename=args['fp'], layout=layout)
+        write_cyjson(graph=graph, filename=args['fp'], layout=layout)
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
     exit(0)
-
-
-def clus_central(graph, limit=2, max_clusters=5, min_clusters=2, iterations=20, edgescale=0.1,
-                 central=True, percentile=10, permutations=100, error=0.1):
-    """
-    Main function that carries out graph clustering and calculates centralities.
-    :param graph: NetworkX graph to cluster. Needs to have edge weights.
-    :param limit: Percentage in error decrease until matrix is considered converged.
-    :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
-    :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
-    :param iterations: If algorithm does not converge, it stops here.
-    :param edgescale: Mean edge weight for node removal
-    :param central: If True, centrality values are calculated.
-    :param percentile: Determines percentile thresholds.
-    :param permutations: Number of permutations.
-    :param error: Fraction of edges to rewire for reliability tests.
-    :param fuzzy: If true, fuzzy nodes are identified
-    :return:
-    """
-    results = cluster_graph(graph, limit=limit, max_clusters=max_clusters,
-                            min_clusters=min_clusters, iterations=iterations,
-                            edgescale=edgescale, permutations=permutations)
-    graph = results[0]
-    if central:
-        central_edge(graph, percentile=percentile,
-                     permutations=permutations, error=error)
-        central_node(graph)
-    return graph
 
 
 if __name__ == '__main__':
