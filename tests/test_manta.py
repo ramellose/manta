@@ -12,7 +12,7 @@ import unittest
 import networkx as nx
 from manta.cluster import cluster_graph, sparsity_score, cluster_fuzzy, cluster_hard, _cluster_vector
 from manta.flow import diffusion
-from manta.centrality import central_edge, central_node, rewire_graph, perm_graph
+from manta.reliability import central_edge, central_node, rewire_graph, perm_edges
 from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
 import numpy as np
@@ -119,7 +119,7 @@ class TestMain(unittest.TestCase):
         posthresh = np.percentile(matrix, 100 - percentile)
         neghubs = list(map(tuple, np.argwhere(matrix <= negthresh)))
         poshubs = list(map(tuple, np.argwhere(matrix >= posthresh)))
-        bootmats = perm_graph(g, permutations, percentile, poshubs, neghubs, error=0.1)
+        bootmats = perm_edges(g, permutations, percentile, poshubs, neghubs, error=0.1)
         self.assertEqual((len(poshubs) + len(neghubs)), len(bootmats))
 
     def test_center_manta(self):

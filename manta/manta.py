@@ -77,7 +77,7 @@ import networkx as nx
 import sys
 import argparse
 from manta.cluster import cluster_graph
-from manta.centrality import central_edge, central_node
+from manta.reliability import central_edge, central_node, perm_clusters
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 
@@ -136,7 +136,7 @@ def set_manta():
                         dest='iter', type=int,
                         required=False,
                         help='Number of iterations to repeat if convergence is not reached. ',
-                        default=10)
+                        default=20)
     parser.add_argument('-perm', '--permutation',
                         dest='perm', type=int,
                         required=False,
@@ -155,13 +155,18 @@ def set_manta():
                         help='Edge scale used to separate out fuzzy clusters. '
                              'The larger the edge scale, the larger the fuzzy cluster.',
                         default=0.5)
+    parser.add_argument('-cr, --cluster_reliability', dest='cr',
+                        action='store_true',
+                        help='With this flag, reliability of cluster assignment is computed. ', required=False)
+    parser.set_defaults(cr=False)
+
     parser.add_argument('-c, --central', dest='central', action='store_true',
                         help='With this flag, centrality values are calculated for the network. ', required=False)
     parser.set_defaults(central=False)
     parser.add_argument('-rel', '--reliability_permutations',
                         dest='rel', type=int,
                         required=False,
-                        help='Number of permutation iterations for centrality estimates. ',
+                        help='Number of permutation iterations for reliability estimates. ',
                         default=100)
     parser.add_argument('-p', '--percentile',
                         dest='p', type=int,
@@ -227,6 +232,12 @@ def main():
         central_edge(graph, percentile=args['fp'], permutations=args['rel'],
                      error=args['error'], verbose=args['verbose'])
         central_node(graph)
+    if args['cr']:
+        perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
+                      min_clusters=args['min'], iterations=args['iter'],
+                      ratio=args['ratio'],
+                      partialperms=args['perm'], relperms=args['rel'],
+                      error=args['error'], verbose=args['verbose'])
     layout = None
     if args['layout']:
         layout = generate_layout(graph, args['tax'])

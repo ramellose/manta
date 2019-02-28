@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Centrality scores can be tested for their reliability.
+Centrality scores and cluster assignments can be tested for their reliability.
 The idea behind this test is that random rewiring should, to some extent,
 preserve the most central structures of the original graph.
 We cannot know which edges are true positives and which ones are false positives,
@@ -13,9 +13,8 @@ Weight is assigned randomly by sampling with replacement from the original weigh
 For each of these networks, the diffusion iterations specified in cluster_sparse are repeated
 as many times as for the original network. The outcome is then a matrix of diffusion scores.
 
-With these matrices, the bootstrap error can be estimated. This error specifies how variable
-the centrality statistic is expected to be. It is used in 1-sided t-tests to determine
-whether centrality scores are larger or smaller than the percentile thresholds.
+With these matrices, the reliability can be estimated. This error specifies how variable
+the assignments are expected to be.
 
 """
 
@@ -28,6 +27,7 @@ __license__ = 'Apache 2.0'
 import networkx as nx
 import numpy as np
 from manta.flow import diffusion
+from manta.cluster import cluster_graph
 from scipy.stats import binom_test
 from random import choice
 import sys
@@ -63,7 +63,7 @@ def central_edge(graph, percentile, permutations, error, verbose):
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
     if permutations > 0:
-        score = perm_graph(graph, percentile=percentile, permutations=permutations,
+        score = perm_edges(graph, percentile=percentile, permutations=permutations,
                            pos=poshubs, neg=neghubs, error=error)
     # need to make sure graph is undirected
     graph = nx.to_undirected(graph)
@@ -168,7 +168,7 @@ def rewire_graph(graph, error):
     return model, swapfail
 
 
-def perm_graph(graph, permutations, percentile, pos, neg, error):
+def perm_edges(graph, permutations, percentile, pos, neg, error):
     """
     Calls the rewire_graph function;
     returns reliability scores of edge centrality scores.
@@ -197,6 +197,73 @@ def perm_graph(graph, permutations, percentile, pos, neg, error):
         perms.append(adj)
         # sys.stdout.write('Permutation ' + str(i) + '\n')
         # sys.stdout.flush()
+    posmatches = dict()
+    negmatches = dict()
+    for hub in pos:
+        posmatches[hub] = 0
+    for hub in neg:
+        negmatches[hub] = 0
+    for perm in perms:
+        negthresh = np.percentile(perm, percentile)
+        posthresh = np.percentile(perm, 100 - percentile)
+        permneg = list(map(tuple, np.argwhere(perm <= negthresh)))
+        permpos = list(map(tuple, np.argwhere(perm >= posthresh)))
+        matches = set(pos).intersection(permpos)
+        for match in matches:
+            posmatches[match] += 1
+        matches = set(neg).intersection(permneg)
+        for match in matches:
+            negmatches[match] += 1
+    reliability = posmatches.copy()
+    reliability.update(negmatches)
+    reliability = {k: (v/permutations) for k, v in reliability.items()}
+    # p value equals number of permutations that exceeds / is smaller than matrix values
+    return reliability
+
+
+def perm_clusters(graph, limit, max_clusters, min_clusters,
+                  iterations, ratio, partialperms, relperms, error, verbose):
+    """
+    Calls the rewire_graph function
+    to compute reliability of cluster assignments.
+    Scores close to 1 imply that the scores are robust to perturbation.
+
+    Reliability scores as proposed by:
+    Frantz, T. L., & Carley, K. M. (2017).
+    Reporting a network’s most-central actor with a confidence level.
+    Computational and Mathematical Organization Theory, 23(2), 301-312.
+
+    Because calculating the accuracy of a cluster assignment is not trivial,
+    the function does not compare cluster labels directly.
+    Instead, this function calculates the Jaccard similarity between cluster assignments.
+
+    Parameters
+    ----------
+    :param graph: NetworkX graph of a microbial association network. Cluster assignment should be a network property.
+    :param limit: Percentage in error decrease until matrix is considered converged.
+    :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
+    :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
+    :param iterations: If algorithm does not converge, it stops here.
+    :param ratio: Ratio of scores that need to be positive or negative for a stable edge
+    :param partialperms: Number of permutations for partial diffusion.
+    :param relperms: Number of permutations for reliability testing.
+    :param error: Fraction of edges to rewire for reliability metric.
+    :param verbose: Verbosity level of function
+    :return: List of reliability scores.
+    """
+    cluster_assignments = list()
+    for i in range(relperms):
+        permutation, swapfail = rewire_graph(graph, error)
+        if swapfail:
+            return
+        cluster_graph(graph=permutation, limit=limit, max_clusters=max_clusters,
+                      min_clusters=min_clusters, iterations=iterations,
+                      ratio=ratio, edgescale=0, permutations=partialperms,
+                      verbose=False)
+
+        if verbose:
+            sys.stdout.write('Permutation ' + str(i) + '\n')
+            sys.stdout.flush()
     posmatches = dict()
     negmatches = dict()
     for hub in pos:
