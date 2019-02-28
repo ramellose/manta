@@ -28,7 +28,7 @@ import networkx as nx
 import numpy as np
 from manta.flow import diffusion
 from manta.cluster import cluster_graph
-from scipy.stats import binom_test
+from scipy.stats import binom_test, norm
 from random import choice
 import sys
 
@@ -251,17 +251,74 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     :param verbose: Verbosity level of function
     :return: List of reliability scores.
     """
-    cluster_assignments = list()
+    assignments = list()
+    rev_assignments = list()
     for i in range(relperms):
         permutation, swapfail = rewire_graph(graph, error)
         if swapfail:
             return
-        cluster_graph(graph=permutation, limit=limit, max_clusters=max_clusters,
+        permutation, mat = cluster_graph(graph=permutation, limit=limit, max_clusters=max_clusters,
                       min_clusters=min_clusters, iterations=iterations,
                       ratio=ratio, edgescale=0, permutations=partialperms,
                       verbose=False)
+        cluster = nx.get_node_attributes(permutation, 'cluster')
+        # cluster.values() has same order as permutation.nodes
+        assignments.append(cluster)
+        subassignments = dict()
+        for k, v in cluster.items():
+            subassignments.setdefault(v, set()).add(k)
+        rev_assignments.append(subassignments)
         if verbose:
             sys.stdout.write('Permutation ' + str(i) + '\n')
             sys.stdout.flush()
-    # p value equals number of permutations that exceeds / is smaller than matrix values
-    return i
+    graphclusters = nx.get_node_attributes(graph, 'cluster')
+    revclusters = dict()
+    for k, v in graphclusters.items():
+        revclusters.setdefault(v, set()).add(k)
+    # clusterwise jaccard
+    clusjaccards = dict()
+    for cluster in set(graphclusters.values()):
+        true_composition = revclusters[cluster]
+        jaccards = list()
+        # keys don't have to match so both cluster assignments should be evaluated
+        for rev_assignment in rev_assignments:
+            scores = list()
+            for key in rev_assignment:
+                scores.append(jaccard_similarity_score(true_composition, rev_assignment[key]))
+            bestmatch = np.max(scores)
+            jaccards.append(bestmatch)
+        clusjaccards[cluster] = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
+    sys.stdout.write("Confidence intervals for Jaccard similarity of cluster assignments: \n")
+    sys.stdout.write(str(clusjaccards) + "\n")
+    sys.stdout.flush()
+    lowerCI = dict.fromkeys(graph.nodes)
+    upperCI = dict.fromkeys(graph.nodes)
+    for node in lowerCI:
+        true_composition = revclusters[graphclusters[node]]
+        jaccards = list()
+        for i in range(len(assignments)):
+            clusid = assignments[i][node]
+            rev_assignment = rev_assignments[i][clusid]
+            jaccards.append(jaccard_similarity_score(true_composition, rev_assignment))
+        CI = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
+        lowerCI[node] = CI[0]
+        upperCI[node] = CI[1]
+    nx.set_node_attributes(graph, lowerCI, "lowerCI")
+    nx.set_node_attributes(graph, upperCI, "upperCI")
+    if verbose:
+        sys.stdout.write("Completed estimation of node Jaccard similarities across bootstraps. \n")
+        sys.stdout.flush()
+
+
+def jaccard_similarity_score(vector1, vector2):
+    """
+    The sklearn implementation of the Jaccard similarity requires vectors to be equal length.
+    This implementation does not.
+    :param vector1: List of strings or numbers.
+    :param vector2: List of strings or numbers.
+    :return:
+    """
+    jaccard = len(vector1.intersection(vector2)) / \
+              (len(vector1) + len(vector2) - len(vector1.intersection(vector2)))
+    return jaccard
+

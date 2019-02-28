@@ -71,7 +71,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
             sys.stdout.write("Memory effect or convergence to 0 detected. Switching to partial diffusion. \n")
             sys.stdout.flush()
         # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
-        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations,
+        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit,
                                                ratio=ratio, permutations=permutations, verbose=verbose)
     bestcluster = None
     # the randomclust is a random separation into two clusters
@@ -90,7 +90,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
             if adj_index[node] in fuzzy_nodes:
                 fuzzy_dict[node] = 'Fuzzy'
             else:
-                fuzzy_dict[node] = 'Sharp'
+                fuzzy_dict[node] = 'Crisp'
             nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
     nx.set_node_attributes(graph, values=bestcluster, name='cluster')
     return graph, scoremat
@@ -229,11 +229,14 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
             sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
             sys.stdout.flush()
     else:
-        if verbose:
-            sys.stdout.write('Warning: random clustering performed best.'
-                             ' \n Setting cluster amount to minimum value. \n')
-            sys.stdout.flush()
+        sys.stdout.write('Warning: random clustering performed best.'
+                         ' \n Setting cluster amount to minimum value. \n')
+        sys.stdout.flush()
         topscore = min_clusters
+        # it is possible that all evaluated cluster assignments did not work out
+        # in that case, the assignment below is without the binning strategy
+        if min_clusters not in bestclusters:
+            bestclusters[min_clusters] = AgglomerativeClustering(n_clusters=min_clusters).fit_predict(clustermat)
     # given a topscore, clustering is carried out on scoremat without outliers
     outlier_locs = [adj_index[x] for x in outliers[topscore]]
     scoremat_index = rev_index.copy()
