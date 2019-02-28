@@ -260,29 +260,8 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
                       min_clusters=min_clusters, iterations=iterations,
                       ratio=ratio, edgescale=0, permutations=partialperms,
                       verbose=False)
-
         if verbose:
             sys.stdout.write('Permutation ' + str(i) + '\n')
             sys.stdout.flush()
-    posmatches = dict()
-    negmatches = dict()
-    for hub in pos:
-        posmatches[hub] = 0
-    for hub in neg:
-        negmatches[hub] = 0
-    for perm in perms:
-        negthresh = np.percentile(perm, percentile)
-        posthresh = np.percentile(perm, 100 - percentile)
-        permneg = list(map(tuple, np.argwhere(perm <= negthresh)))
-        permpos = list(map(tuple, np.argwhere(perm >= posthresh)))
-        matches = set(pos).intersection(permpos)
-        for match in matches:
-            posmatches[match] += 1
-        matches = set(neg).intersection(permneg)
-        for match in matches:
-            negmatches[match] += 1
-    reliability = posmatches.copy()
-    reliability.update(negmatches)
-    reliability = {k: (v/permutations) for k, v in reliability.items()}
     # p value equals number of permutations that exceeds / is smaller than matrix values
-    return reliability
+    return i
