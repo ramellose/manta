@@ -148,7 +148,7 @@ def rewire_graph(graph, error):
     :return: Rewired NetworkX graph
     """
     model = graph.copy(as_view=False).to_undirected(as_view=False)
-    swaps = len(model.nodes) * error
+    swaps = round(len(model.nodes) * error)
     swapfail = False
     try:
         nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
@@ -157,14 +157,13 @@ def rewire_graph(graph, error):
                          'Please choose a lower error parameter, or avoid calculating a centrality score. ' + '\n')
         sys.stdout.flush()
         swapfail = True
-    model = nx.to_undirected(model)
-    edge_weights = list()
-    for edge in graph.edges:
-        edge_weights.append(graph[edge[0]][edge[1]]['weight'])
-    random_weights = dict()
-    for edge in model.edges:
-        random_weights[edge] = choice(edge_weights)
-    nx.set_edge_attributes(model, random_weights, 'weight')
+    # edge_weights = list()
+    # for edge in graph.edges:
+    #     edge_weights.append(graph[edge[0]][edge[1]]['weight'])
+    # random_weights = dict()
+    # for edge in model.edges:
+    #     random_weights[edge] = choice(edge_weights)
+    # nx.set_edge_attributes(model, random_weights, 'weight')
     return model, swapfail
 
 
@@ -301,8 +300,8 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
             rev_assignment = rev_assignments[i][clusid]
             jaccards.append(jaccard_similarity_score(true_composition, rev_assignment))
         CI = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
-        lowerCI[node] = CI[0]
-        upperCI[node] = CI[1]
+        lowerCI[node] = str(CI[0])
+        upperCI[node] = str(CI[1])
     nx.set_node_attributes(graph, lowerCI, "lowerCI")
     nx.set_node_attributes(graph, upperCI, "upperCI")
     if verbose:

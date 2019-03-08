@@ -4,7 +4,6 @@
 Although NetworkX already contains read/write utilities for Cyjson networks,
 these do not accomodate networks without an index (e.g. those generated with CoNet).
 Moreover, they do not support inclusion of a network layout.
-
 The functions below have been adapted to tackle these issues.
 They are derived from the original NetworkX read/write functions.
 """
@@ -22,43 +21,32 @@ import json
 def read_cyjson(filename, direction):
     """Small utility function for reading Cytoscape json files
     generated with CoNet.
-
     Parameters
     ----------
     :param filename: Filepath to location of cyjs file.
     :return: NetworkX graph.
-
     Adapted from the NetworkX cytoscape_graph function.
-
     License
     =======
-
     NetworkX is distributed with the 3-clause BSD license.
-
     ::
-
        Copyright (C) 2004-2018, NetworkX Developers
        Aric Hagberg <hagberg@lanl.gov>
        Dan Schult <dschult@colgate.edu>
        Pieter Swart <swart@lanl.gov>
        All rights reserved.
-
        Redistribution and use in source and binary forms, with or without
        modification, are permitted provided that the following conditions are
        met:
-
          * Redistributions of source code must retain the above copyright
            notice, this list of conditions and the following disclaimer.
-
          * Redistributions in binary form must reproduce the above
            copyright notice, this list of conditions and the following
            disclaimer in the documentation and/or other materials provided
            with the distribution.
-
          * Neither the name of the NetworkX Developers nor the names of its
            contributors may be used to endorse or promote products derived
            from this software without specific prior written permission.
-
        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
        "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
        LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -118,45 +106,34 @@ def read_cyjson(filename, direction):
 def write_cyjson(filename, graph, layout=None):
     """Small utility function for writing Cytoscape json files.
     Also accepts a layout dictionary to add to the file.
-
     Parameters
     ----------
     :param filename: Filepath to location of cyjs file.
     :param graph: NetworkX graph to write to disk.
     :param layout: Dictionary of layout coordinates that is written to cyjs file.
     :return:
-
     Adapted from the NetworkX cytoscape_graph function.
-
     License
     =======
-
     NetworkX is distributed with the 3-clause BSD license.
-
     ::
-
        Copyright (C) 2004-2018, NetworkX Developers
        Aric Hagberg <hagberg@lanl.gov>
        Dan Schult <dschult@colgate.edu>
        Pieter Swart <swart@lanl.gov>
        All rights reserved.
-
        Redistribution and use in source and binary forms, with or without
        modification, are permitted provided that the following conditions are
        met:
-
          * Redistributions of source code must retain the above copyright
            notice, this list of conditions and the following disclaimer.
-
          * Redistributions in binary form must reproduce the above
            copyright notice, this list of conditions and the following
            disclaimer in the documentation and/or other materials provided
            with the distribution.
-
          * Neither the name of the NetworkX Developers nor the names of its
            contributors may be used to endorse or promote products derived
            from this software without specific prior written permission.
-
        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
        "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
        LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
