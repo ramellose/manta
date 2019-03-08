@@ -263,14 +263,16 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
             sys.stdout.write('Permutation ' + str(i) + '\n')
             sys.stdout.flush()
     graphclusters = nx.get_node_attributes(graph, 'cluster')
-    clusjaccards, nodejaccards = robustness(graphclusters, assignments)
+    clusjaccards, nodejaccards, ci_width = robustness(graphclusters, assignments)
     lowerCI = dict()
     upperCI = dict()
     for node in nodejaccards:
         lowerCI[node] = str(nodejaccards[0])
         upperCI[node] = str(nodejaccards[1])
+        ci_width[node] = str(ci_width[node])
     nx.set_node_attributes(graph, lowerCI, "lowerCI")
     nx.set_node_attributes(graph, upperCI, "upperCI")
+    nx.set_node_attributes(graph, ci_width, "widthCI")
     if verbose:
         sys.stdout.write("Completed estimation of node Jaccard similarities across bootstraps. \n")
         sys.stdout.flush()
@@ -316,11 +318,12 @@ def robustness(graphclusters, permutations):
                 scores.append(jaccard_similarity_score(true_composition, rev_assignment[key]))
             bestmatch = np.max(scores)
             jaccards.append(bestmatch)
-        clusjaccards[cluster] = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
+        clusjaccards[cluster] = np.round(norm.interval(0.95, np.mean(jaccards), np.std(jaccards)), 4)
     sys.stdout.write("Confidence intervals for Jaccard similarity of cluster assignments: \n")
     sys.stdout.write(str(clusjaccards) + "\n")
     sys.stdout.flush()
     nodejaccards = dict.fromkeys(graphclusters.keys())
+    ci_width = dict.fromkeys(graphclusters.keys())
     for node in nodejaccards:
         true_composition = revclusters[graphclusters[node]]
         jaccards = list()
@@ -328,8 +331,9 @@ def robustness(graphclusters, permutations):
             clusid = permutations[i][node]
             rev_assignment = rev_assignments[i][clusid]
             jaccards.append(jaccard_similarity_score(true_composition, rev_assignment))
-        nodejaccards[node] = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
-    return clusjaccards, nodejaccards
+        nodejaccards[node] = np.round(norm.interval(0.95, np.mean(jaccards), np.std(jaccards)), 4)
+        CIwidth = nodejaccards[0] - nodejaccards[1]
+    return clusjaccards, nodejaccards, ci_width
 
 
 def jaccard_similarity_score(vector1, vector2):
