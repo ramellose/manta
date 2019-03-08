@@ -223,18 +223,10 @@ def perm_edges(graph, permutations, percentile, pos, neg, error):
 def perm_clusters(graph, limit, max_clusters, min_clusters,
                   iterations, ratio, partialperms, relperms, error, verbose):
     """
-    Calls the rewire_graph function
-    to compute reliability of cluster assignments.
+    Calls the rewire_graph function and robustness function
+    to compute robustness of cluster assignments.
     Scores close to 1 imply that the scores are robust to perturbation.
 
-    Reliability scores as proposed by:
-    Frantz, T. L., & Carley, K. M. (2017).
-    Reporting a network’s most-central actor with a confidence level.
-    Computational and Mathematical Organization Theory, 23(2), 301-312.
-
-    Because calculating the accuracy of a cluster assignment is not trivial,
-    the function does not compare cluster labels directly.
-    Instead, this function calculates the Jaccard similarity between cluster assignments.
 
     Parameters
     ----------
@@ -248,7 +240,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     :param relperms: Number of permutations for reliability testing.
     :param error: Fraction of edges to rewire for reliability metric.
     :param verbose: Verbosity level of function
-    :return: List of reliability scores.
+    :return:
     """
     assignments = list()
     rev_assignments = list()
@@ -271,6 +263,44 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
             sys.stdout.write('Permutation ' + str(i) + '\n')
             sys.stdout.flush()
     graphclusters = nx.get_node_attributes(graph, 'cluster')
+    clusjaccards, nodejaccards = robustness(graphclusters, assignments)
+    lowerCI = dict()
+    upperCI = dict()
+    for node in nodejaccards:
+        lowerCI[node] = str(nodejaccards[0])
+        upperCI[node] = str(nodejaccards[1])
+    nx.set_node_attributes(graph, lowerCI, "lowerCI")
+    nx.set_node_attributes(graph, upperCI, "upperCI")
+    if verbose:
+        sys.stdout.write("Completed estimation of node Jaccard similarities across bootstraps. \n")
+        sys.stdout.flush()
+
+
+def robustness(graphclusters, permutations):
+    """
+    Compares vectors of cluster assignments to estimate cluster-wise robustness
+    and node-wise robustness. These are returned as dictionaries.
+
+    Inspired by reliablity scores as proposed by:
+    Frantz, T. L., & Carley, K. M. (2017).
+    Reporting a network’s most-central actor with a confidence level.
+    Computational and Mathematical Organization Theory, 23(2), 301-312.
+
+    Because calculating the accuracy of a cluster assignment is not trivial,
+    the function does not compare cluster labels directly.
+    Instead, this function calculates the Jaccard similarity between cluster assignments.
+
+    Parameters
+    ----------
+    :param graphclusters: Dictionary of original cluster assignments
+    :return: Two dictionaries of reliability scores (cluster-wise and node-wise).
+    """
+    rev_assignments = list()
+    subassignments = dict()
+    for assignment in permutations:
+        for k, v in assignment.items():
+            subassignments.setdefault(v, set()).add(k)
+        rev_assignments.append(subassignments)
     revclusters = dict()
     for k, v in graphclusters.items():
         revclusters.setdefault(v, set()).add(k)
@@ -290,23 +320,16 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     sys.stdout.write("Confidence intervals for Jaccard similarity of cluster assignments: \n")
     sys.stdout.write(str(clusjaccards) + "\n")
     sys.stdout.flush()
-    lowerCI = dict.fromkeys(graph.nodes)
-    upperCI = dict.fromkeys(graph.nodes)
-    for node in lowerCI:
+    nodejaccards = dict.fromkeys(graphclusters.keys())
+    for node in nodejaccards:
         true_composition = revclusters[graphclusters[node]]
         jaccards = list()
-        for i in range(len(assignments)):
-            clusid = assignments[i][node]
+        for i in range(len(permutations)):
+            clusid = permutations[i][node]
             rev_assignment = rev_assignments[i][clusid]
             jaccards.append(jaccard_similarity_score(true_composition, rev_assignment))
-        CI = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
-        lowerCI[node] = str(CI[0])
-        upperCI[node] = str(CI[1])
-    nx.set_node_attributes(graph, lowerCI, "lowerCI")
-    nx.set_node_attributes(graph, upperCI, "upperCI")
-    if verbose:
-        sys.stdout.write("Completed estimation of node Jaccard similarities across bootstraps. \n")
-        sys.stdout.flush()
+        nodejaccards[node] = norm.interval(0.95, np.mean(jaccards), np.std(jaccards))
+    return clusjaccards, nodejaccards
 
 
 def jaccard_similarity_score(vector1, vector2):
