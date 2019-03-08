@@ -332,7 +332,7 @@ def robustness(graphclusters, permutations):
             rev_assignment = rev_assignments[i][clusid]
             jaccards.append(jaccard_similarity_score(true_composition, rev_assignment))
         nodejaccards[node] = np.round(norm.interval(0.95, np.mean(jaccards), np.std(jaccards)), 4)
-        CIwidth = nodejaccards[0] - nodejaccards[1]
+        ci_width[node] =  nodejaccards[node][0] - nodejaccards[node][1]
     return clusjaccards, nodejaccards, ci_width
 
 
