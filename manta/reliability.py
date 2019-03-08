@@ -267,8 +267,8 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     lowerCI = dict()
     upperCI = dict()
     for node in nodejaccards:
-        lowerCI[node] = str(nodejaccards[0])
-        upperCI[node] = str(nodejaccards[1])
+        lowerCI[node] = str(nodejaccards[node][0])
+        upperCI[node] = str(nodejaccards[node][1])
         ci_width[node] = str(ci_width[node])
     nx.set_node_attributes(graph, lowerCI, "lowerCI")
     nx.set_node_attributes(graph, upperCI, "upperCI")
