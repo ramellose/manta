@@ -108,6 +108,7 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
                                  'Clustering with partial network. ' + '\n')
                 sys.stdout.flush()
             convergence = True
+            memory = True
             break
         if inflation:
             for value in np.nditer(updated_mat, op_flags=['readwrite']):
