@@ -186,7 +186,7 @@ def rewire_graph(graph, error):
     model = graph.copy(as_view=False).to_undirected(as_view=False)
     swaps = round(len(model.nodes) * error)
     swapfail = False
-    max_tries = 100
+    max_tries = len(model.nodes) * 10
     try:
         n = 0
         swapcount = 0
