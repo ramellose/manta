@@ -455,20 +455,6 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs,
     for target in graph.nodes:
         clus_id = assignment[adj_index[target]]
         try:
-            opposite = anti_corrs[clus_id]
-            # not all clusters have an oscillator,
-            # therefore, not all have anti-correlating oscillators
-            if np.sign(corrdict[clusdict[clus_id]][target]) == np.sign(corrdict[clusdict[opposite]][target]):
-                clus_matches.append(target)
-            if np.sign(corrdict[clusdict[opposite]][target]) == 0:
-                clus_matches.append(target)
-        except KeyError:
-            pass
-            # if the signs of the shortest paths to the oscillators are the same,
-            # this implies the node is in between cluster
-        # if nodes are assigned to the same cluster as the oscillators
-        # cumulative edge weights of shortest paths should be + 1
-        try:
             weight = corrdict[clusdict[clus_id]][target]
             if np.sign(weight) == -1:
                 clus_assign.append(target)
@@ -481,12 +467,9 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs,
         sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
                          str(clus_assign) + '\n' +
                          'Mean edge products are small for: \n' +
-                         str(varweights) + '\n' +
-                         'Mean edge products are not the opposite sign for opposing oscillators: \n' +
-                         str(clus_matches) + '\n')
+                         str(varweights) + '\n' )
         sys.stdout.flush()
     remove_cluster = set([adj_index[x] for x in clus_assign + varweights])
-                          # + clus_matches])
     return list(remove_cluster)
 
 def _node_sparsity(graph, removals, assignment, rev_index):
