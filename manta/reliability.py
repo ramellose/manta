@@ -368,8 +368,8 @@ def robustness(graphclusters, permutations):
     :return: Two dictionaries of reliability scores (cluster-wise and node-wise).
     """
     rev_assignments = list()
-    subassignments = dict()
     for assignment in permutations:
+        subassignments = dict()
         for k, v in assignment.items():
             subassignments.setdefault(v, set()).add(k)
         rev_assignments.append(subassignments)
