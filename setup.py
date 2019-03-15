@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='manta',
-      version='0.1.0',
+      version='0.2.0',
       packages=['manta'],
       description='Microbial association network clustering',
       author='Lisa Röttjers',

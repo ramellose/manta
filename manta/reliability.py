@@ -141,6 +141,42 @@ def rewire_graph(graph, error):
     the fraction of positive / negative weights per node
     is not preserved.
 
+    Part of the rewire_graph function has been adapted from the original
+    NetworkX double_edge_swap function. The adapted version also swaps edge weights.
+
+    License
+    =======
+    NetworkX is distributed with the 3-clause BSD license.
+    ::
+       Copyright (C) 2004-2018, NetworkX Developers
+       Aric Hagberg <hagberg@lanl.gov>
+       Dan Schult <dschult@colgate.edu>
+       Pieter Swart <swart@lanl.gov>
+       All rights reserved.
+       Redistribution and use in source and binary forms, with or without
+       modification, are permitted provided that the following conditions are
+       met:
+         * Redistributions of source code must retain the above copyright
+           notice, this list of conditions and the following disclaimer.
+         * Redistributions in binary form must reproduce the above
+           copyright notice, this list of conditions and the following
+           disclaimer in the documentation and/or other materials provided
+           with the distribution.
+         * Neither the name of the NetworkX Developers nor the names of its
+           contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+       THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+       "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+       LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+       A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+       OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+       SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+       LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+       DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+       THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
     Parameters
     ----------
     :param graph: Original graph to rewire.
@@ -150,8 +186,42 @@ def rewire_graph(graph, error):
     model = graph.copy(as_view=False).to_undirected(as_view=False)
     swaps = round(len(model.nodes) * error)
     swapfail = False
+    max_tries = 100
     try:
-        nx.algorithms.double_edge_swap(model, nswap=swaps, max_tries=(swaps*100))
+        n = 0
+        swapcount = 0
+        keys, degrees = zip(*model.degree())  # keys, degree
+        cdf = nx.utils.cumulative_distribution(degrees)  # cdf of degree
+        discrete_sequence = nx.utils.discrete_sequence
+        while swapcount < swaps:
+            #        if random.random() < 0.5: continue # trick to avoid periodicities?
+            # pick two random edges without creating edge list
+            # choose source node indices from discrete distribution
+            (ui, xi) = discrete_sequence(2, cdistribution=cdf)
+            if ui == xi:
+                continue  # same source, skip
+            u = keys[ui]  # convert index to label
+            x = keys[xi]
+            # choose target uniformly from neighbors
+            v = choice(list(model[u]))
+            y = choice(list(model[x]))
+            if v == y:
+                continue  # same target, skip
+            if (x not in model[u]) and (y not in model[v]):  # don't create parallel edges
+                weight_uv = model.edges[u, v]['weight']
+                weight_xy = model.edges[x, y]['weight']
+                model.add_edge(u, x)
+                model.edges[u, x]['weight'] = weight_uv
+                model.add_edge(v, y)
+                model.edges[v, y]['weight'] = weight_xy
+                model.remove_edge(u, v)
+                model.remove_edge(x, y)
+                swapcount += 1
+            if n >= max_tries:
+                e = ('Maximum number of swap attempts (%s) exceeded ' % n +
+                     'before desired swaps achieved (%s).' % swaps)
+                raise nx.NetworkXAlgorithmError(e)
+            n += 1
     except nx.exception.NetworkXAlgorithmError:
         sys.stdout.write('Cannot permute this network fraction. ' + '\n' +
                          'Please choose a lower error parameter, or avoid calculating a centrality score. ' + '\n')
