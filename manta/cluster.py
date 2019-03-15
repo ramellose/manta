@@ -81,7 +81,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters, min_clusters=min_clusters, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
-    if memory:
+    if memory or convergence:
         fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
                                     edgescale=edgescale,
                                     adj_index=adj_index, rev_index=rev_index, verbose=verbose)
