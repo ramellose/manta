@@ -51,12 +51,13 @@ import networkx as nx
 import json
 
 
-def read_cyjson(filename, direction):
+def read_cyjson(filename, direction=False):
     """Small utility function for reading Cytoscape json files
     generated with CoNet.
     Parameters
     ----------
     :param filename: Filepath to location of cyjs file.
+    :param direction: If true, graph is imported as a NetworkX DiGraph
     :return: NetworkX graph.
     """
     with open(filename) as f:
