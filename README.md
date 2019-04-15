@@ -23,7 +23,7 @@ It also accepts text files with edge lists, with the third column containing edg
 manta -i filepath_to_input_network -o filepath_to_output_network
 ```
 
-To generate a taxonomically-informed layout and centrality scores, add some flags:
+To generate a taxonomically-informed layout, add some flags:
 ```
 manta -i filepath_to_input_network -o filepath_to_output_network -f cyjs --layout --central -tax filepath_to_tax_table
 ```
@@ -35,6 +35,7 @@ For a complete explanation of all the parameters, run:
 manta -h
 ```
 
+Alternatively, check out the Sphinx documentation @ https://ramellose.github.io/manta/index.html.
 ### Contributions
 
 This software is still in early alpha. Any feedback or bug reports will be much appreciated!
