@@ -196,7 +196,7 @@ class TestMain(unittest.TestCase):
         clustered_graph = cluster_graph(deepcopy(directg), limit, max_clusters, min_clusters,
                   iterations, ratio, edgescale, permutations, verbose)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
-        self.assertEqual(clusters['OTU_1'], 0)
+        self.assertEqual(len(clusters), 10)
 
     def test_diffuse_graph(self):
         """Checks if the diffusion process operates correctly. """
