@@ -134,7 +134,7 @@ class TestMain(unittest.TestCase):
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         hubs = nx.get_edge_attributes(graph, 'hub')
-        self.assertEqual(hubs[list(hubs.keys())[0]], 'negative hub')
+        self.assertEqual(hubs[('OTU_3', 'OTU_4')], 'negative hub')
 
     def test_central_node(self):
         """
