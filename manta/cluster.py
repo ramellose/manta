@@ -185,15 +185,17 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     outliers = dict()
     outliers[clusnum] = list()
     clustermat = scoremat.copy()
+    # minimum cluster size is 10% of nodes
+    minclus = len(graph) * 0.1
     while clusnum < max_clusters + 1:
         clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(clustermat)
         counts = np.bincount(clusters)
         # then add to cluster based on shortest paths
-        if len(np.where(counts < 3)[0]) > 0:
+        if len(np.where(counts < minclus)[0]) > 0:
             # if there is a cluster with fewer than 3 nodes,
             # remove nodes that separate into tiny cluster
             # get cluster ID and location for this cluster
-            locs = np.where(counts < 3)[0]
+            locs = np.where(counts < minclus)[0]
             # we only remove one cluster pos at a time
             # repeated clustering may assign node differently
             loc = locs[0]
