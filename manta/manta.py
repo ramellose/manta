@@ -121,6 +121,11 @@ def set_manta():
                         required=False,
                         help='Minimum number of clusters. ',
                         default=2)
+    parser.add_argument('-ms', '--min_size',
+                        dest='ms', type=float,
+                        required=False,
+                        help='Minimum cluster size as fraction of network size',
+                        default=0.1)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
@@ -224,7 +229,8 @@ def main():
     else:
         network = nx.to_undirected(network)
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
-                            min_clusters=args['min'], iterations=args['iter'],
+                            min_clusters=args['min'], min_cluster_size=args['ms'],
+                            iterations=args['iter'],
                             ratio=args['ratio'], edgescale=args['edgescale'],
                             permutations=args['perm'], verbose=args['verbose'])
     graph = results[0]

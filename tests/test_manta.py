@@ -78,6 +78,7 @@ nx.set_edge_attributes(directg, values=weights, name='weight')
 
 limit = 2
 min_clusters = 2
+min_cluster_size = 0.1
 max_clusters = 5
 iterations = 20
 central = True
@@ -111,7 +112,7 @@ class TestMain(unittest.TestCase):
     def test_bootstrap(self):
         """Checks if reliability scores for the graph are returned. """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
         matrix = results[1]
@@ -130,7 +131,7 @@ class TestMain(unittest.TestCase):
         are not stable.
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         hubs = nx.get_edge_attributes(graph, 'hub')
@@ -142,7 +143,7 @@ class TestMain(unittest.TestCase):
         no nodes are identified as hubs (actually the p-value is too low).
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         central_node(graph)
@@ -159,7 +160,8 @@ class TestMain(unittest.TestCase):
         rev_index = {v: k for k, v in adj_index.items()}
         scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
         bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
-                                   max_clusters=max_clusters, min_clusters=min_clusters, verbose=verbose)
+                                   max_clusters=max_clusters, min_clusters=min_clusters,
+                                   min_cluster_size=min_cluster_size, verbose=verbose)
         flatcluster = _cluster_vector(bestcluster, adj_index)
         bestcluster = cluster_fuzzy(graph=graph, diffs=diffs, cluster=flatcluster, edgescale=0.5, adj_index=adj_index,
                                     rev_index=rev_index, verbose=verbose)
@@ -170,7 +172,7 @@ class TestMain(unittest.TestCase):
     def test_cluster_manta(self):
         """Checks whether the correct cluster IDs are assigned. """
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
 
@@ -179,7 +181,7 @@ class TestMain(unittest.TestCase):
         Checks whether the main function carries out both clustering and centrality estimates.
         """
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         graph = clustered_graph[0]
         central_edge(graph, percentile, rel,
                      error, verbose)
@@ -194,7 +196,7 @@ class TestMain(unittest.TestCase):
         on a DiGraph.
         """
         clustered_graph = cluster_graph(deepcopy(directg), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(len(clusters), 10)
 
@@ -206,7 +208,7 @@ class TestMain(unittest.TestCase):
     def test_layout(self):
         """Checks whether the layout function returns a dictionary of coordinates."""
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                  iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 

@@ -116,8 +116,6 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
                     # with this normalisation, the inflation step causes
                     # the algorithm to converge to 0
                     # we need above-0 values to converge to -1, and the rest to 1
-                    # previous: value * abs(value)
-                    # this inflation does not result in desired sparsity
                     try:
                         value[...] = value + (1/value)
                     except RuntimeWarning:

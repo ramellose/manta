@@ -35,7 +35,7 @@ from itertools import combinations, chain
 from copy import deepcopy
 
 
-def cluster_graph(graph, limit, max_clusters, min_clusters,
+def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
                   iterations, ratio, edgescale, permutations, verbose):
     """
     Takes a networkx graph and carries out network clustering.
@@ -48,6 +48,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
     :param limit: Percentage in error decrease until matrix is considered converged.
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
+    :param min_cluster_size: Minimum cluster size as fraction of network size
     :param iterations: If algorithm does not converge, it stops here.
     :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param edgescale: Mean edge weight for node removal
@@ -79,7 +80,8 @@ def cluster_graph(graph, limit, max_clusters, min_clusters,
     # select optimal cluster by sparsity score
     #if not memory:
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
-                               max_clusters=max_clusters, min_clusters=min_clusters, verbose=verbose)
+                               max_clusters=max_clusters,
+                               min_clusters=min_clusters, min_cluster_size=min_cluster_size, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
     if memory or convergence:
         fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
@@ -155,7 +157,7 @@ def sparsity_score(graph, clusters, rev_index):
 
 
 def cluster_hard(graph, adj_index, rev_index, scoremat,
-                 max_clusters, min_clusters, verbose):
+                 max_clusters, min_clusters, min_cluster_size, verbose):
     """
     Agglomerative clustering is used to separate nodes based on the scoring matrix.
     Because the scoring matrix generally results in separation of 'central' nodes,
@@ -170,6 +172,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     :param scoremat: Converged diffusion matrix
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
+    :param min_cluster_size: Minimum cluster size as fraction of network size
     :param verbose: Verbosity level of function
     :return: Dictionary of nodes with cluster assignments
     """
@@ -186,7 +189,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     outliers[clusnum] = list()
     clustermat = scoremat.copy()
     # minimum cluster size is 10% of nodes
-    minclus = len(graph) * 0.1
+    minclus = len(graph) * min_cluster_size
     while clusnum < max_clusters + 1:
         clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(clustermat)
         counts = np.bincount(clusters)
