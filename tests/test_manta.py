@@ -135,6 +135,9 @@ class TestMain(unittest.TestCase):
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         hubs = nx.get_edge_attributes(graph, 'hub')
+        if ('OTU_4', 'OTU_3') in hubs:
+            hubs['OTU_3', 'OTU_4']  = hubs['OTU_4', 'OTU_3']
+            # 3.5 test sometimes swaps keys around apparently
         self.assertEqual(hubs[('OTU_3', 'OTU_4')], 'negative hub')
 
     def test_central_node(self):
