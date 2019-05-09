@@ -9,7 +9,6 @@ setup(name='manta',
       url='https://github.com/ramellose/manta',
       license='Apache-2.0',
       include_package_data=True,
-      package_data={'manta': ['demo.graphml']},
       summary='Clustering and centrality algorithms for weighted and undirected networks.',
       entry_points={
           'console_scripts': [
