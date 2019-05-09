@@ -37,7 +37,7 @@ manta -h
 
 For a demo run, a network generated from oral samples of bats has been included.
 
-This data was downloaded from QIITA: https://qiita.ucsd.edu/study/description/11815
+This data was downloaded from [QIITA](https://qiita.ucsd.edu/study/description/11815).
 
 Lutz, H. L., Jackson, E. W., Dick, C., Webala, P. W., Babyesiza, W. S., Peterhans, J. C. K., ... & Gilbert, J. A. (2018). __Associations between Afrotropical bats, parasites, and microbial symbionts.__ bioRxiv, 340109.
 
@@ -46,7 +46,9 @@ To run the demo, run _manta_ as follows:
 manta -i demo -o filepath_to_output_network
 ```
 
-For documentation of specific functions, check out the Sphinx documentation @ https://ramellose.github.io/manta/index.html.
+For a more elaborate demo that goes through all the variables, go [here](https://ramellose.github.io/networktutorials/demo.html).
+
+For documentation of specific functions, check out [the Sphinx documentation](https://ramellose.github.io/manta/index.html).
 ### Contributions
 
 This software is still in early alpha. Any feedback or bug reports will be much appreciated!
