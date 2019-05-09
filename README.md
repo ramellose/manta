@@ -1,6 +1,4 @@
-# manta
-
-![manta](https://github.com/ramellose/manta/blob/master/manta.png)
+# manta ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
 
 Microbial association network clustering algorithm. Version 0.2.0.
 
