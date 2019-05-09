@@ -362,9 +362,11 @@ def robustness(graphclusters, permutations):
     the function does not compare cluster labels directly.
     Instead, this function calculates the Jaccard similarity between cluster assignments.
 
+
     Parameters
     ----------
     :param graphclusters: Dictionary of original cluster assignments
+    :param permutations: Number of permutations to compute robustness.
     :return: Two dictionaries of reliability scores (cluster-wise and node-wise).
     """
     rev_assignments = list()

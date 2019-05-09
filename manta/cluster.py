@@ -5,7 +5,7 @@ The clustering algorithm works in several steps to generate cluster assignments.
 
 1. Generate a scoring matrix using a network flow strategy
 2. Cluster on the scoring matrix.
-3. In case the network displays memory effects, define fuzzy nodes.
+3. In case the network displays memory effects, define weak nodes.
 
 The scoring matrix is first clustered with the AgglomerativeClustering algorithm.
 Because the network flow strategy can result in central values being separated from the clusters,
@@ -13,7 +13,7 @@ agglomerative clustering is repeated on score matrices with removed high-scoring
 until larger clusters are identified.
 After this step, clustering assignments are  set.
 However, if the network caused the scoring matrix to enter a flip-flop state,
-nodes can still be defined as 'fuzzy'.
+nodes can still be defined as 'weak'.
 In this case, manta uses a shortest path strategy to assess whether nodes belong to a cluster
 or are in conflict with the cluster oscillator.
 
@@ -39,7 +39,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
                   iterations, ratio, edgescale, permutations, verbose):
     """
     Takes a networkx graph and carries out network clustering.
-    The returned graph contains cluster assignments and fuzzy assignments.
+    The returned graph contains cluster assignments and weak assignments.
     If weight is available, this is considered during the diffusion process.
 
     Parameters
@@ -84,16 +84,16 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
                                min_clusters=min_clusters, min_cluster_size=min_cluster_size, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
     if memory or convergence:
-        fuzzy_nodes = cluster_fuzzy(graph, diffs=diffs, cluster=flatcluster,
+        weak_nodes = cluster_weak(graph, diffs=diffs, cluster=flatcluster,
                                     edgescale=edgescale,
                                     adj_index=adj_index, rev_index=rev_index, verbose=verbose)
-        fuzzy_dict = dict()
+        weak_dict = dict()
         for node in graph.nodes:
-            if adj_index[node] in fuzzy_nodes:
-                fuzzy_dict[node] = 'Fuzzy'
+            if adj_index[node] in weak_nodes:
+                weak_dict[node] = 'Weak'
             else:
-                fuzzy_dict[node] = 'Crisp'
-            nx.set_node_attributes(graph, values=fuzzy_dict, name='Assignment')
+                weak_dict[node] = 'Strong'
+            nx.set_node_attributes(graph, values=weak_dict, name='Assignment')
     nx.set_node_attributes(graph, values=bestcluster, name='cluster')
     return graph, scoremat
 
@@ -278,9 +278,9 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     return cluster_index
 
 
-def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose):
+def cluster_weak(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose):
     """
-    Although clusters can be assigned with cluster_hard, cluster_fuzzy tests
+    Although clusters can be assigned with cluster_hard, cluster_weak tests
     whether cluster assignments are in conflict with oscillator nodes present in clusters.
 
     Oscillators can only be defined from flip-flopping states;
@@ -305,9 +305,9 @@ def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index, verbos
     # nodes that are in-between clusters do not have large self-loop amplitudes
     #bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,
     #                           max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
-    # cluster assignment 0 is reserved for fuzzy clusters
+    # cluster assignment 0 is reserved for weak clusters
     if verbose:
-        sys.stdout.write('Determining fuzzy nodes. \n')
+        sys.stdout.write('Determining weak nodes. \n')
         sys.stdout.flush()
     # diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge
     # each timeseries is 5 flip-flops long
@@ -334,19 +334,19 @@ def cluster_fuzzy(graph, diffs, cluster, edgescale, adj_index, rev_index, verbos
     # count relative frequeny - values close to 1 or 0 are ok
     #posratio = posfreq[np.where(posfreq != 0)] / \
     #           (posfreq[np.where(posfreq != 0)] + negfreq[np.where(posfreq != 0)])
-    #fuzzy_edges = np.where(np.logical_and(posratio < 0.8, posratio > 0.2))
-    #fuzzy_ids = np.where(posfreq != 0)
-    #indices = fuzzy_ids[0][fuzzy_edges[0]]
-    #fuzzy_freq = np.unique(indices, return_counts=True)
-    # determine how to go from fuzzy edges to fuzzy nodes
-    # [0] or [1] does not matter, fuzzy_edges is symmetrical
-    #fuzzy_nodes = list()
-    #for i in range(len(fuzzy_freq[0])):
-    #   node = fuzzy_freq[0][i]
-    #    freq = fuzzy_freq[1][i]
+    #weak_edges = np.where(np.logical_and(posratio < 0.8, posratio > 0.2))
+    #weak_ids = np.where(posfreq != 0)
+    #indices = weak_ids[0][weak_edges[0]]
+    #weak_freq = np.unique(indices, return_counts=True)
+    # determine how to go from weak edges to weak nodes
+    # [0] or [1] does not matter, weak_edges is symmetrical
+    #weak_nodes = list()
+    #for i in range(len(weak_freq[0])):
+    #   node = weak_freq[0][i]
+    #    freq = weak_freq[1][i]
     #    deg = nx.degree(graph, list(graph.nodes)[0])
     #    if freq / deg > edgescale:
-    #        fuzzy_nodes.append(i)
+    #        weak_nodes.append(i)
     return remove_cluster
 
 
@@ -462,8 +462,10 @@ def _oscillator_paths(graph, core_oscillators, anti_corrs,
         try:
             weight = corrdict[clusdict[clus_id]][target]
             if np.sign(weight) == -1:
+                # this criterion filters out nodes that have negative path weight to their oscillator
                 clus_assign.append(target)
-            if -edgescale < weight < edgescale:  # the 0.5 and -0.5 values are arbitrary
+            if -edgescale < weight < edgescale:
+                # this criterion filters out nodes that have low cumulative path weights
                 varweights.append(target)
         except KeyError:
             pass

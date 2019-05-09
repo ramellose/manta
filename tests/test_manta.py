@@ -10,7 +10,7 @@ __license__ = 'Apache 2.0'
 
 import unittest
 import networkx as nx
-from manta.cluster import cluster_graph, sparsity_score, cluster_fuzzy, cluster_hard, _cluster_vector
+from manta.cluster import cluster_graph, sparsity_score, cluster_weak, cluster_hard, _cluster_vector
 from manta.flow import diffusion
 from manta.reliability import central_edge, central_node, rewire_graph, perm_edges
 from manta.layout import generate_layout, generate_tax_weights
@@ -152,9 +152,9 @@ class TestMain(unittest.TestCase):
         central_node(graph)
         self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
 
-    def test_cluster_fuzzy(self):
+    def test_cluster_weak(self):
         """Cluster_hard is already tested through the regular cluster_graph function.
-        To test cluster_fuzzy, this function carries out clustering as
+        To test cluster_weak, this function carries out clustering as
         if a memory effect has been detected."""
         graph = deepcopy(g)
         adj_index = dict()
@@ -166,7 +166,7 @@ class TestMain(unittest.TestCase):
                                    max_clusters=max_clusters, min_clusters=min_clusters,
                                    min_cluster_size=min_cluster_size, verbose=verbose)
         flatcluster = _cluster_vector(bestcluster, adj_index)
-        bestcluster = cluster_fuzzy(graph=graph, diffs=diffs, cluster=flatcluster, edgescale=0.5, adj_index=adj_index,
+        bestcluster = cluster_weak(graph=graph, diffs=diffs, cluster=flatcluster, edgescale=0.5, adj_index=adj_index,
                                     rev_index=rev_index, verbose=verbose)
         # Actually, this toy model only opposing-sign nodes,
         # those are too harsh and were therefore removed.

@@ -93,7 +93,8 @@ def set_manta():
                     'a cluster- and phylogeny-informed layout.')
     parser.add_argument('-i', '--input_graph',
                         dest='graph',
-                        help='Input network file.',
+                        help='Input network file. The format is detected based on the extension; \n'
+                             'at the moment, .graphml, .txt (weighted edgelist), .gml and .cyjs are accepted. ',
                         default=None, required=True)
     parser.add_argument('-o', '--output_graph',
                         dest='fp',
@@ -101,7 +102,7 @@ def set_manta():
                         default=None, required=True)
     parser.add_argument('-f', '--file_type',
                         dest='f',
-                        help='Format of output network file. Default is set to cyjs.',
+                        help='Format of output network file. Default: cyjs.',
                         choices=['gml', 'edgelist',
                                  'graphml', 'adj', 'cyjs'],
                         default='cyjs')
@@ -119,67 +120,57 @@ def set_manta():
     parser.add_argument('-min', '--min_clusters',
                         dest='min', type=int,
                         required=False,
-                        help='Minimum number of clusters. ',
+                        help='Minimum number of clusters. Default: 2.',
                         default=2)
     parser.add_argument('-ms', '--min_size',
                         dest='ms', type=float,
                         required=False,
-                        help='Minimum cluster size as fraction of network size',
+                        help='Minimum cluster size as fraction of network size. Default: 0.1.',
                         default=0.1)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
-                        help='Maximum number of clusters. ',
+                        help='Maximum number of clusters. Default: 4.',
                         default=4)
     parser.add_argument('-limit', '--convergence_limit',
                         dest='limit', type=float,
                         required=False,
                         help='The limit defines the minimum percentage decrease in error per iteration.'
-                             ' If iterations do not decrease the error anymore, the matrix is considered converged. ',
+                             ' If iterations do not decrease the error anymore, the matrix is considered converged. '
+                             'Default: 2.',
                         default=2)
     parser.add_argument('-iter', '--iterations',
                         dest='iter', type=int,
                         required=False,
-                        help='Number of iterations to repeat if convergence is not reached. ',
+                        help='Number of iterations to repeat if convergence is not reached. Default: 20.',
                         default=20)
     parser.add_argument('-perm', '--permutation',
                         dest='perm', type=int,
                         required=False,
                         help='Number of permutation iterations for '
-                             'network subsetting during partial iterations. ',
+                             'network subsetting during partial iterations. Default: 100.',
                         default=100)
     parser.add_argument('-ratio', '--stability_ratio',
                         dest='ratio', type=float,
                         required=False,
                         help='Fraction of scores that need to be positive or negative'
-                             'for edge scores to be considered stable. ',
-                        default=0.7)
+                             'for edge scores to be considered stable. Default: 0.8.',
+                        default=0.8)
     parser.add_argument('-scale', '--edgescale',
                         dest='edgescale', type=int,
                         required=False,
-                        help='Edge scale used to separate out fuzzy clusters. '
-                             'The larger the edge scale, the larger the fuzzy cluster.',
-                        default=0.5)
+                        help='Edge scale used to separate out weak cluster assignments. '
+                             'The larger the edge scale, the larger the waek cluster. Default: 0.8.',
+                        default=0.8)
     parser.add_argument('-cr, --cluster_reliability', dest='cr',
                         action='store_true',
                         help='With this flag, reliability of cluster assignment is computed. ', required=False)
     parser.set_defaults(cr=False)
-
-    parser.add_argument('-c, --central', dest='central', action='store_true',
-                        help='With this flag, centrality values are calculated for the network. ', required=False)
-    parser.set_defaults(central=False)
     parser.add_argument('-rel', '--reliability_permutations',
                         dest='rel', type=int,
                         required=False,
-                        help='Number of permutation iterations for reliability estimates. ',
+                        help='Number of permutation iterations for reliability estimates. Default: 100.',
                         default=100)
-    parser.add_argument('-p', '--percentile',
-                        dest='p', type=int,
-                        required=False,
-                        help='Percentile of central edges to return. For example, '
-                             ' a percentile of 10 returns edges below the 10th and '
-                             'edges above the 90th percentile. ',
-                        default=10)
     parser.add_argument('-e', '--error',
                         dest='error', type=int,
                         required=False,
@@ -234,10 +225,6 @@ def main():
                             ratio=args['ratio'], edgescale=args['edgescale'],
                             permutations=args['perm'], verbose=args['verbose'])
     graph = results[0]
-    if args['central']:
-        central_edge(graph, percentile=args['fp'], permutations=args['rel'],
-                     error=args['error'], verbose=args['verbose'])
-        central_node(graph)
     if args['cr']:
         perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
                       min_clusters=args['min'], iterations=args['iter'],
