@@ -37,9 +37,9 @@ manta -h
 
 For a demo run, a network generated from oral samples of bats has been included.
 This data was downloaded from QIITA: https://qiita.ucsd.edu/study/description/11815
-Lutz, H. L., Jackson, E. W., Dick, C., Webala, P. W., Babyesiza, W. S., Peterhans, J. C. K., ... & Gilbert, J. A. (2018). Associations between Afrotropical bats, parasites, and microbial symbionts. bioRxiv, 340109.
+\nLutz, H. L., Jackson, E. W., Dick, C., Webala, P. W., Babyesiza, W. S., Peterhans, J. C. K., ... & Gilbert, J. A. (2018). __Associations between Afrotropical bats, parasites, and microbial symbionts.__ bioRxiv, 340109.
 
-To run the demo, run manta as follows:
+To run the demo, run_manta_as follows:
 ```
 manta -i demo -o filepath_to_output_network
 ```
