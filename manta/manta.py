@@ -207,7 +207,7 @@ def main():
     else:
         path = os.path.dirname(manta.__file__)
         path = path + '\\tests\\demo.graphml'
-        network = nx.read_graphml()
+        network = nx.read_graphml(path)
     if args['direction']:
         if extension == 'txt':
             sys.stdout.write('Directed networks from edge lists not supported, use graphml or cyjs!. ' + '\n')
