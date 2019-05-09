@@ -1,4 +1,4 @@
-# manta ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
+# _manta_ ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
 
 Microbial association network clustering algorithm. Version 0.2.0.
 
@@ -11,7 +11,7 @@ This version is still in early alpha and has been tested for Python 3.6.
 
 ## Getting Started
 
-To install <i>manta</i>, run:
+To install _manta_, run:
 ```
 pip install git+https://github.com/ramellose/manta.git
 ```
@@ -41,7 +41,7 @@ This data was downloaded from QIITA: https://qiita.ucsd.edu/study/description/11
 
 Lutz, H. L., Jackson, E. W., Dick, C., Webala, P. W., Babyesiza, W. S., Peterhans, J. C. K., ... & Gilbert, J. A. (2018). __Associations between Afrotropical bats, parasites, and microbial symbionts.__ bioRxiv, 340109.
 
-To run the demo, run_manta_as follows:
+To run the demo, run _manta_ as follows:
 ```
 manta -i demo -o filepath_to_output_network
 ```
