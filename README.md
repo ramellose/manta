@@ -1,10 +1,10 @@
 # manta
 
-Microbial association network clustering algorithm. Version 0.1.0.
+Microbial association network clustering algorithm. Version 0.2.0.
 
 [![Build Status](https://travis-ci.com/ramellose/manta.svg?token=9mhqeTh13MErxyrk5zR8&branch=master)](https://travis-ci.com/ramellose/manta)
 
-This toolbox is aimed at weighted & undirected microbial networks. It uses a diffusion-based proccess to carry out network clustering & centrality calculations.
+This toolbox is aimed at weighted & undirected microbial networks. It uses a diffusion-based proccess to carry out network clustering..
 Moreover, it can generate a Cytoscape-compatible layout that places taxonomically similar & structurally similar nodes closer together.
 Contact the author at lisa.rottjers (at) kuleuven.be. Your feedback is much appreciated!
 This version is still in early alpha and has been tested for Python 3.6.
@@ -17,7 +17,7 @@ pip install git+https://github.com/ramellose/manta.git
 ```
 
 To run the script, only two arguments are required: input and output filepaths.
-The script recognizes gml, graphml and cyjs files. By default, cyjs is exported.
+The script recognizes gml, graphml and cyjs files by their extension. By default, cyjs is exported.
 It also accepts text files with edge lists, with the third column containing edge weight.
 ```
 manta -i filepath_to_input_network -o filepath_to_output_network
@@ -35,7 +35,16 @@ For a complete explanation of all the parameters, run:
 manta -h
 ```
 
-Alternatively, check out the Sphinx documentation @ https://ramellose.github.io/manta/index.html.
+For a demo run, a network generated from oral samples of bats has been included.
+This data was downloaded from QIITA: https://qiita.ucsd.edu/study/description/11815
+Lutz, H. L., Jackson, E. W., Dick, C., Webala, P. W., Babyesiza, W. S., Peterhans, J. C. K., ... & Gilbert, J. A. (2018). Associations between Afrotropical bats, parasites, and microbial symbionts. bioRxiv, 340109.
+
+To run the demo, run manta as follows:
+```
+manta -i demo -o filepath_to_output_network
+```
+
+For documentation of specific functions, check out the Sphinx documentation @ https://ramellose.github.io/manta/index.html.
 ### Contributions
 
 This software is still in early alpha. Any feedback or bug reports will be much appreciated!

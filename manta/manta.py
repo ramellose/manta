@@ -3,7 +3,7 @@
 """
 manta: microbial association network clustering toolbox.
 The script takes a weighted and undirected network as input
-and uses this to generate network clusters and calculate network centrality.
+and uses this to generate network clusters.
 Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
 Detailed explanations are available in the headers of each file.
 
@@ -52,20 +52,7 @@ positions in the scoring matrix that are mostly positive throughout permutations
 The same is assumed for negative positions.
 The ratio defines which positions are considered mostly positive or mostly negative.
 
-After this partial network flow procedure, oscillating nodes can be used to identify nodes that do not belong to clusters.
-The -scale argument defines a threshold for this separation.
-
-The arguments for network centralities include:
-
-* --central If flagged, centrality values are calculated.
-* -rel Number of permutations for reliability calculations.
-* -p Percentile of central nodes returned.
-* -e Fraction of edges to rewire for reliability calculations.
-
-Centrality values are based on a derivation of the network flow procedure.
-This derivation does not include normalization, and therefore closely resembles a branching process.
-To establish robustness of centrality scores to errors, the scores are also calculated on permuted networks.
-
+For demo purposes, we included a network generated from data
 """
 
 __author__ = 'Lisa Rottjers'
@@ -75,9 +62,11 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import sys
+import os
 import argparse
+import manta
 from manta.cluster import cluster_graph
-from manta.reliability import central_edge, central_node, perm_clusters
+from manta.reliability import perm_clusters
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 
@@ -94,8 +83,10 @@ def set_manta():
     parser.add_argument('-i', '--input_graph',
                         dest='graph',
                         help='Input network file. The format is detected based on the extension; \n'
-                             'at the moment, .graphml, .txt (weighted edgelist), .gml and .cyjs are accepted. ',
-                        default=None, required=True)
+                             'at the moment, .graphml, .txt (weighted edgelist), .gml and .cyjs are accepted. \n'
+                             'If you set -i to "demo", a demo dataset will be loaded.',
+                        default=None,
+                        required=True)
     parser.add_argument('-o', '--output_graph',
                         dest='fp',
                         help='Output network file.',
@@ -192,26 +183,31 @@ def set_manta():
 def main():
     args = set_manta().parse_args(sys.argv[1:])
     args = vars(args)
-    filename = args['graph'].split(sep=".")
-    extension = filename[len(filename)-1]
-    try:
-        if extension == 'graphml':
-            network = nx.read_graphml(args['graph'])
-        elif extension == 'txt':
-            network = nx.read_weighted_edgelist(args['graph'])
-        elif extension == 'gml':
-            network = nx.read_gml(args['graph'])
-        elif extension == 'cyjs':
-            network = read_cyjson(args['graph'])
-        else:
-            sys.stdout.write('Format not accepted.' + '\n')
+    if args['graph'] != 'demo':
+        filename = args['graph'].split(sep=".")
+        extension = filename[len(filename)-1]
+        try:
+            if extension == 'graphml':
+                network = nx.read_graphml(args['graph'])
+            elif extension == 'txt':
+                network = nx.read_weighted_edgelist(args['graph'])
+            elif extension == 'gml':
+                network = nx.read_gml(args['graph'])
+            elif extension == 'cyjs':
+                network = read_cyjson(args['graph'])
+            else:
+                sys.stdout.write('Format not accepted.' + '\n')
+                sys.stdout.flush()
+                exit()
+        except Exception:
+            sys.stdout.write('Could not import network file! ' + '\n')
             sys.stdout.flush()
             exit()
-    except Exception:
-        sys.stdout.write('Could not import network file! ' + '\n')
-        sys.stdout.flush()
-        exit()
-    # first need to convert network to undirected
+        # first need to convert network to undirected
+    else:
+        path = os.path.dirname(manta.__file__)
+        path = path + '\\tests\\demo.graphml'
+        network = nx.read_graphml()
     if args['direction']:
         if extension == 'txt':
             sys.stdout.write('Directed networks from edge lists not supported, use graphml or cyjs!. ' + '\n')
