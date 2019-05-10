@@ -157,9 +157,10 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
         scoremat = firstmat
     if iters == iterations:
         convergence = True
-        sys.stdout.write('Matrix failed to converge.' + '\n' +
-                         'Clustering with partial network. ' + '\n')
-        sys.stdout.flush()
+        if verbose:
+            sys.stdout.write('Matrix failed to converge.' + '\n' +
+                             'Clustering with partial network. ' + '\n')
+            sys.stdout.flush()
     return scoremat, memory, convergence, diffs
 
 
@@ -252,10 +253,13 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
             updated_mat = updated_mat / abs(np.max(updated_mat))
             error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
             error = np.mean(error) * 100
-            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
-                # if there is a flip-flop state, the error will alternate between two values
-                max_iters = iters + 5
-                memory = True
+            if error != 0:
+                if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+                    # if there is a flip-flop state, the error will alternate between two values
+                    max_iters = iters + 5
+                    memory = True
+            else:
+                break
             error_2 = error_1
             error_1 = error
             submat = updated_mat
