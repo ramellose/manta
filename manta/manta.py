@@ -174,7 +174,7 @@ def set_manta():
                         default=False)
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
-                        required=False, type=bool,
+                        required=False,
                         action='store_true',
                         help='Provides additional details on progress. ',
                         default=False)
