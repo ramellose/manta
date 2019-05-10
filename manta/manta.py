@@ -169,8 +169,9 @@ def set_manta():
                         default=0.1)
     parser.add_argument('-dir', '--direction',
                         dest='direction',
-                        required=False, type=bool,
-                        help='If set to False, directed graphs are converted to undirected after import. ',
+                        action='store_true',
+                        required=False,
+                        help='If flagged, directed graphs are not converted to undirected after import. ',
                         default=False)
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
