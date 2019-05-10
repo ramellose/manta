@@ -155,6 +155,11 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     if memory:
         diffs = diffs[-5:]
         scoremat = firstmat
+    if iters == iterations:
+        convergence = True
+        sys.stdout.write('Matrix failed to converge.' + '\n' +
+                         'Clustering with partial network. ' + '\n')
+        sys.stdout.flush()
     return scoremat, memory, convergence, diffs
 
 
