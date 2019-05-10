@@ -70,6 +70,7 @@ from manta.cluster import cluster_graph
 from manta.reliability import perm_clusters
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
+import numpy as np
 
 
 def set_manta():
