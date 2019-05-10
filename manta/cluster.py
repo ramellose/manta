@@ -69,7 +69,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
         if verbose:
-            sys.stdout.write("Memory effect or convergence to 0 detected. Switching to partial diffusion. \n")
+            sys.stdout.write("Memory effect, convergence to 0 or failure to converge detected. \n Switching to partial diffusion. \n")
             sys.stdout.flush()
         # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
         scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit,
