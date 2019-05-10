@@ -89,7 +89,7 @@ def set_manta():
                         required=True)
     parser.add_argument('-o', '--output_graph',
                         dest='fp',
-                        help='Output network file.',
+                        help='Output network file. Specify full file path without extension.',
                         default=None, required=True)
     parser.add_argument('-f', '--file_type',
                         dest='f',
@@ -233,15 +233,15 @@ def main():
     if args['layout']:
         layout = generate_layout(graph, args['tax'])
     if args['f'] == 'graphml':
-        nx.write_graphml(graph, args['fp'])
+        nx.write_graphml(graph, args['fp'] + '.graphml')
     elif args['f'] == 'edgelist':
-        nx.write_weighted_edgelist(graph, args['fp'])
+        nx.write_weighted_edgelist(graph, args['fp'] + '.txt')
     elif args['f'] == 'gml':
-        nx.write_gml(graph, args['fp'])
+        nx.write_gml(graph, args['fp'] + '.gml')
     elif args['f'] == 'adj':
-        nx.write_multiline_adjlist(graph, args['fp'])
+        nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
     elif args['f'] == 'cyjs':
-        write_cyjson(graph=graph, filename=args['fp'], layout=layout)
+        write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
     sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
     sys.stdout.flush()
     exit(0)
