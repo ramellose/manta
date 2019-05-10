@@ -263,7 +263,7 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
         result.append(submat)
         b += 1
         if verbose:
-            sys.stdout.write("Partial diffusion" + str(b) + "\n")
+            sys.stdout.write("Partial diffusion " + str(b) + "\n")
             sys.stdout.flush()
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
