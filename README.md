@@ -35,7 +35,7 @@ For a complete explanation of all the parameters, run:
 manta -h
 ```
 
-For a demo run, a network generated from oral samples of bats has been included.
+For a demo run, a network generated from fecal samples of bats has been included.
 
 This data was downloaded from [QIITA](https://qiita.ucsd.edu/study/description/11815).
 
