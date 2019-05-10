@@ -148,10 +148,10 @@ def set_manta():
                              'for edge scores to be considered stable. Default: 0.8.',
                         default=0.8)
     parser.add_argument('-scale', '--edgescale',
-                        dest='edgescale', type=int,
+                        dest='edgescale', type=float,
                         required=False,
                         help='Edge scale used to separate out weak cluster assignments. '
-                             'The larger the edge scale, the larger the waek cluster. Default: 0.8.',
+                             'The larger the edge scale, the larger the weak cluster. Default: 0.8.',
                         default=0.8)
     parser.add_argument('-cr, --cluster_reliability', dest='cr',
                         action='store_true',

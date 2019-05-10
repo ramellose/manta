@@ -318,8 +318,7 @@ def cluster_weak(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose
     # for each node with contrasting edge products,
     # we can check whether the sparsity score is improved by
     # removing the node or adding it to another cluster.
-    remove_cluster = _oscillator_paths(graph=graph, core_oscillators=core,
-                                       anti_corrs=anti, assignment=cluster,
+    remove_cluster = _oscillator_paths(graph=graph, core_oscillators=core, assignment=cluster,
                                        adj_index=adj_index, edgescale=edgescale, verbose=verbose)
 
     # we only remove nodes with conflicting shortest paths if
@@ -428,7 +427,7 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index, verbose):
     return core_oscillators, anti_corrs
 
 
-def _oscillator_paths(graph, core_oscillators, anti_corrs,
+def _oscillator_paths(graph, core_oscillators,
                       assignment, adj_index, edgescale, verbose):
     """
     Given optimal cluster assignments and a set of core oscillators,
