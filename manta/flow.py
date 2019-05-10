@@ -217,11 +217,8 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
                     except FloatingPointError:
                         # this indicates the matrix is busy converging to 0
                         # in that case, we do the same as with the memory effect
-                        if verbose:
-                            sys.stdout.write('Matrix converging to zero.' + '\n' +
-                                             'Clustering with partial network. ' + '\n')
-                            sys.stdout.flush()
-                            break                # updated_mat[updated_mat > 0] = \
+                        break
+                # updated_mat[updated_mat > 0] = \
                 #    updated_mat[updated_mat > 0] / \
                 #    abs(np.max(updated_mat[updated_mat > 0]))
                 # updated_mat[updated_mat < 0] = \
@@ -265,7 +262,7 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
                 submat = firstmat
             result.append(submat)
             b += 1
-            sys.stdout.write("Permutation " + str(b))
+            sys.stdout.write("Permutation " + str(b) + "\n")
             sys.stdout.flush()
         except RuntimeWarning:
             pass
