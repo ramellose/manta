@@ -22,7 +22,7 @@ The arguments for importing and exporting data include:
 * -tax Filepath to taxonomy table.
 * --layout If flagged, a layout is generated
 * -dir If a directed network is imported, setting this to True converts the network to undirected.
-
+* -b If flagged, all edge weights are converted to 1 and -1.
 manta uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
 These tables can be used to generate a layout for cyjson files.
 Other file formats do not export layout coordinates.
@@ -31,6 +31,7 @@ The arguments for network clustering include:
 
 * -min Minimum cluster number
 * -max Maximum cluster number
+* -mc Minimum cluster size
 * -limit Error limit until convergence is considered reached
 * -iter Number of iterations to keep going if convergence is not reached
 
@@ -173,6 +174,12 @@ def set_manta():
                         required=False,
                         help='If flagged, directed graphs are not converted to undirected after import. ',
                         default=False)
+    parser.add_argument('-b', '--binary',
+                        dest='bin',
+                        action='store_true',
+                        required=False,
+                        default=False,
+                        help='If flagged, edge weights are converted to 1 and -1.')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         required=False,
@@ -217,6 +224,9 @@ def main():
             exit()
     else:
         network = nx.to_undirected(network)
+    if args['bin']:
+        for edge in network.edges:
+            network.edges[edge]['weight'] = np.sign(network.edges[edge]['weight'])
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
                             min_clusters=args['min'], min_cluster_size=args['ms'],
                             iterations=args['iter'],
