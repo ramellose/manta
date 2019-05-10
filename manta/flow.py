@@ -265,6 +265,8 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
                 submat = firstmat
             result.append(submat)
             b += 1
+            sys.stdout.write("Permutation " + str(b))
+            sys.stdout.flush()
         except RuntimeWarning:
             pass
     posfreq = np.zeros((len(graph), len(graph)))
