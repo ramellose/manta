@@ -89,7 +89,17 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
             # in the MCL implementation, the rows are normalized to sum to 1
             # this creates a column stochastic matrix
             # here, we normalize by dividing with absolute largest value
-            updated_mat = updated_mat / abs(np.max(updated_mat))
+            try:
+                updated_mat = updated_mat / abs(np.max(updated_mat))
+            except RuntimeWarning:
+                # this indicates the matrix is busy converging to 0
+                # in that case, we do the same as with the memory effect
+                if verbose:
+                    sys.stdout.write('Matrix converging to zero.' + '\n' +
+                                     'Clustering with partial network. ' + '\n')
+                    sys.stdout.flush()
+                    convergence = True
+                    break
             # updated_mat[updated_mat > 0] = \
             #    updated_mat[updated_mat > 0] / \
             #    abs(np.max(updated_mat[updated_mat > 0]))
@@ -98,17 +108,8 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
             #    abs(np.min(updated_mat[updated_mat < 0]))
             # the above code scales negative and positive values separately
             # interestingly, the matrix does not separate correctly if used
-        # we need to check the percentile;
-        # if over 99% of values are close to 0,
         # this indicates the matrix is busy converging to 0
         # in that case, we do the same as with the memory effect
-        if np.percentile(updated_mat, 99) < 0.00000001:
-            if verbose:
-                sys.stdout.write('Matrix converging to zero.' + '\n' +
-                                 'Clustering with partial network. ' + '\n')
-                sys.stdout.flush()
-            convergence = True
-            break
         if inflation:
             for value in np.nditer(updated_mat, op_flags=['readwrite']):
                 if value != 0:
