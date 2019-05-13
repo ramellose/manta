@@ -207,7 +207,7 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     subnum = permutations  # number of subnetworks generated
     b = 0
     while b < subnum:
-        with np.seterr(divide='ignore', over='ignore', invalid='ingore'):
+        with np.seterr(divide='ignore', over='ignore', invalid='ignore'):
             # only add 1 to b if below snippet completes
             # otherwise, keep iterating
             # runtime warnings from the diffusion function are a problem
