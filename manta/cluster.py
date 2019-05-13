@@ -33,7 +33,32 @@ import sys
 from manta.flow import diffusion, partial_diffusion
 from itertools import combinations, chain
 from copy import deepcopy
+import os
+import logging.handlers
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# handler to sys.stdout
+sh = logging.StreamHandler(sys.stdout)
+sh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+sh.setFormatter(formatter)
+logger.addHandler(sh)
+
+# handler to file
+# only handler with 'w' mode, rest is 'a'
+# once this handler is started, the file writing is cleared
+# other handlers append to the file
+logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
+# filelog path is one folder above manta
+# pyinstaller creates a temporary folder, so log would be deleted
+fh = logging.handlers.RotatingFileHandler(maxBytes=500,
+                                          filename=logpath, mode='a')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
                   iterations, ratio, edgescale, permutations, verbose):
@@ -69,8 +94,8 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
         if verbose:
-            sys.stdout.write("Memory effect, convergence to 0 or failure to converge detected. \n Switching to partial diffusion. \n")
-            sys.stdout.flush()
+            logger.info("Memory effect, convergence to 0 or failure to converge detected. \n "
+                        "Switching to partial diffusion.")
         # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
         scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit,
                                                ratio=ratio, permutations=permutations, verbose=verbose)
@@ -180,8 +205,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     scores = dict()
     scores['random'] = (sparsity_score(graph, randomclust, rev_index))
     if verbose:
-        sys.stdout.write('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']) + '\n')
-        sys.stdout.flush()
+        logger.info('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']))
     bestclusters = dict()
     clusnum = min_clusters
     scoremat_index = rev_index.copy()
@@ -220,9 +244,8 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
             scores[clusnum] = sparsity_score(graph, clusters, rev_index)
             bestclusters[clusnum] = clusters
             if verbose:
-                sys.stdout.write('Sparsity level of k=' + str(clusnum) + ' clusters: ' + str(scores[clusnum]) +
-                                 '. \n')
-                sys.stdout.flush()
+                logger.info('Sparsity level of k=' + str(clusnum) + ' clusters: '
+                            + str(scores[clusnum]) + '.')
             clusnum += 1
             outliers[clusnum] = list()
             # reset scoring matrix in case different cluster assignment does assign outliers
@@ -231,12 +254,10 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     topscore = max(scores, key=scores.get)
     if topscore != 'random':
         if verbose:
-            sys.stdout.write('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]) + '\n')
-            sys.stdout.flush()
+            logger.info('Highest score for k=' + str(topscore) + ' clusters: ' + str(scores[topscore]))
     else:
-        sys.stdout.write('Warning: random clustering performed best.'
-                         ' \n Setting cluster amount to minimum value. \n')
-        sys.stdout.flush()
+        logger.warning('Warning: random clustering performed best.'
+                       ' \n Setting cluster amount to minimum value.')
         topscore = min_clusters
         # it is possible that all evaluated cluster assignments did not work out
         # in that case, the assignment below is without the binning strategy
@@ -307,8 +328,7 @@ def cluster_weak(graph, diffs, cluster, edgescale, adj_index, rev_index, verbose
     #                           max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)
     # cluster assignment 0 is reserved for weak clusters
     if verbose:
-        sys.stdout.write('Determining weak nodes. \n')
-        sys.stdout.flush()
+        logger.info('Determining weak nodes.')
     # diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge
     # each timeseries is 5 flip-flops long
     diffs = np.array(diffs)
@@ -377,8 +397,7 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index, verbose):
             oscillators_series.append(seq)
     oscillators = [rev_index[x] for x in oscillators]
     if verbose:
-        sys.stdout.write('Found the following strong oscillators: ' + str(oscillators) + '\n')
-        sys.stdout.flush()
+        logger.info('Found the following strong oscillators: ' + str(oscillators))
     amplis = dict()
     clusdict = dict.fromkeys(oscillators)
     for x in clusdict:
@@ -470,13 +489,13 @@ def _oscillator_paths(graph, core_oscillators,
             pass
             # cannot check oscillator sign for clusters w/o oscillators
     if verbose:
-        sys.stdout.write('Sign of mean edge products does not match cluster assignment for: \n' +
-                         str(clus_assign) + '\n' +
-                         'Mean edge products are small for: \n' +
-                         str(varweights) + '\n' )
-        sys.stdout.flush()
+        logger.info('Sign of mean edge products does not match cluster assignment for: \n' +
+                    str(clus_assign))
+        logger.info('Mean edge products are small for: \n' +
+                    str(varweights))
     remove_cluster = set([adj_index[x] for x in clus_assign + varweights])
     return list(remove_cluster)
+
 
 def _node_sparsity(graph, removals, assignment, rev_index):
     default_sparsity = sparsity_score(graph, assignment, rev_index)
@@ -533,8 +552,7 @@ def _path_weights(source, graph, verbose):
                 total_weight = total_weight / len(shortest_paths)
             except nx.exception.NetworkXNoPath:
                 if verbose:
-                    sys.stdout.write("Could not find shortest path for: " + target + "\n")
-                    sys.stdout.flush()
+                    logger.warning("Could not find shortest path for: " + target)
                 total_weight = -1
             corrdict[node][target] = total_weight
     return corrdict

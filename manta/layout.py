@@ -22,7 +22,32 @@ import sys
 from math import sin, cos, radians
 import csv
 from copy import deepcopy
+import os
+import logging.handlers
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# handler to sys.stdout
+sh = logging.StreamHandler(sys.stdout)
+sh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+sh.setFormatter(formatter)
+logger.addHandler(sh)
+
+# handler to file
+# only handler with 'w' mode, rest is 'a'
+# once this handler is started, the file writing is cleared
+# other handlers append to the file
+logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
+# filelog path is one folder above manta
+# pyinstaller creates a temporary folder, so log would be deleted
+fh = logging.handlers.RotatingFileHandler(maxBytes=500,
+                                          filename=logpath, mode='a')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 def generate_layout(graph, tax=None):
     """
@@ -41,8 +66,7 @@ def generate_layout(graph, tax=None):
     try:
         clusters = nx.get_node_attributes(graph, 'cluster')
     except KeyError:
-        sys.stdout.write('Graph does not appear to have a cluster attribute. ' + '\n')
-        sys.stdout.flush()
+        logger.error('Graph does not appear to have a cluster attribute. ', exc_info=True)
     total = list()
     [total.append(clusters[x]) for x in clusters]
     num_clusters = list(set(total))

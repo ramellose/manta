@@ -71,6 +71,31 @@ from manta.reliability import perm_clusters
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 import numpy as np
+import logging.handlers
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# handler to sys.stdout
+sh = logging.StreamHandler(sys.stdout)
+sh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+sh.setFormatter(formatter)
+logger.addHandler(sh)
+
+# handler to file
+# only handler with 'w' mode, rest is 'a'
+# once this handler is started, the file writing is cleared
+# other handlers append to the file
+logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
+# filelog path is one folder above manta
+# pyinstaller creates a temporary folder, so log would be deleted
+fh = logging.handlers.RotatingFileHandler(maxBytes=500,
+                                          filename=logpath, mode='a')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 def set_manta():
@@ -206,12 +231,10 @@ def main():
             elif extension == 'cyjs':
                 network = read_cyjson(args['graph'])
             else:
-                sys.stdout.write('Format not accepted.' + '\n')
-                sys.stdout.flush()
+                logger.warning('Format not accepted.')
                 exit()
         except Exception:
-            sys.stdout.write('Could not import network file! ' + '\n')
-            sys.stdout.flush()
+            logger.error('Could not import network file!', exc_info=True)
             exit()
         # first need to convert network to undirected
     else:
@@ -220,8 +243,7 @@ def main():
         network = nx.read_graphml(path)
     if args['direction']:
         if extension == 'txt':
-            sys.stdout.write('Directed networks from edge lists not supported, use graphml or cyjs!. ' + '\n')
-            sys.stdout.flush()
+            logger.warning('Directed networks from edge lists not supported, use graphml or cyjs! ')
             exit()
     else:
         network = nx.to_undirected(network)
@@ -253,8 +275,7 @@ def main():
         nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
     elif args['f'] == 'cyjs':
         write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
-    sys.stdout.write('Wrote clustered network to ' + args['fp'] + '.' + '\n')
-    sys.stdout.flush()
+    logger.info('Wrote clustered network to ' + args['fp'] + '.')
     exit(0)
 
 

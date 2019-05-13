@@ -31,7 +31,32 @@ from manta.cluster import cluster_graph
 from scipy.stats import binom_test, norm
 from random import choice
 import sys
+import os
+import logging.handlers
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# handler to sys.stdout
+sh = logging.StreamHandler(sys.stdout)
+sh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+sh.setFormatter(formatter)
+logger.addHandler(sh)
+
+# handler to file
+# only handler with 'w' mode, rest is 'a'
+# once this handler is started, the file writing is cleared
+# other handlers append to the file
+logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
+# filelog path is one folder above manta
+# pyinstaller creates a temporary folder, so log would be deleted
+fh = logging.handlers.RotatingFileHandler(maxBytes=500,
+                                          filename=logpath, mode='a')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 def central_edge(graph, percentile, permutations, error, verbose):
     """
@@ -223,9 +248,8 @@ def rewire_graph(graph, error):
                 raise nx.NetworkXAlgorithmError(e)
             n += 1
     except nx.exception.NetworkXAlgorithmError:
-        sys.stdout.write('Cannot permute this network fraction. ' + '\n' +
-                         'Please choose a lower error parameter, or avoid calculating a centrality score. ' + '\n')
-        sys.stdout.flush()
+        logger.error('Cannot permute this network fraction. ' + '\n' +
+                     'Please choose a lower error parameter, or avoid calculating a centrality score. ', exc_info=True)
         swapfail = True
     # edge_weights = list()
     # for edge in graph.edges:
@@ -264,8 +288,7 @@ def perm_edges(graph, permutations, percentile, pos, neg, error):
             return
         adj = diffusion(graph=permutation, limit=2, iterations=3, norm=False, verbose=False)[0]
         perms.append(adj)
-        # sys.stdout.write('Permutation ' + str(i) + '\n')
-        # sys.stdout.flush()
+        logger.info('Permutation ' + str(i))
     posmatches = dict()
     negmatches = dict()
     for hub in pos:
@@ -330,8 +353,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
             subassignments.setdefault(v, set()).add(k)
         rev_assignments.append(subassignments)
         if verbose:
-            sys.stdout.write('Permutation ' + str(i) + '\n')
-            sys.stdout.flush()
+            logger.info('Permutation ' + str(i))
     graphclusters = nx.get_node_attributes(graph, 'cluster')
     clusjaccards, nodejaccards, ci_width = robustness(graphclusters, assignments)
     lowerCI = dict()
@@ -344,9 +366,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     nx.set_node_attributes(graph, upperCI, "upperCI")
     nx.set_node_attributes(graph, ci_width, "widthCI")
     if verbose:
-        sys.stdout.write("Completed estimation of node Jaccard similarities across bootstraps. \n")
-        sys.stdout.flush()
-
+        logger.info("Completed estimation of node Jaccard similarities across bootstraps.")
 
 def robustness(graphclusters, permutations):
     """
@@ -391,9 +411,8 @@ def robustness(graphclusters, permutations):
             bestmatch = np.max(scores)
             jaccards.append(bestmatch)
         clusjaccards[cluster] = np.round(norm.interval(0.95, np.mean(jaccards), np.std(jaccards)), 4)
-    sys.stdout.write("Confidence intervals for Jaccard similarity of cluster assignments: \n")
-    sys.stdout.write(str(clusjaccards) + "\n")
-    sys.stdout.flush()
+    logger.info("Confidence intervals for Jaccard similarity of cluster assignments:")
+    logger.info(str(clusjaccards))
     nodejaccards = dict.fromkeys(graphclusters.keys())
     ci_width = dict.fromkeys(graphclusters.keys())
     for node in nodejaccards:
