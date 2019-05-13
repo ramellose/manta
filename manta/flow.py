@@ -235,7 +235,10 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
             for value in np.nditer(updated_mat, op_flags=['readwrite']):
                 if value != 0:
                     value[...] = value + (1/value)
-            updated_mat = updated_mat / np.max(abs(updated_mat))
+            if not np.isnan(updated_mat).any():
+                updated_mat = updated_mat / np.max(abs(updated_mat))
+            else:
+                break
             error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
             error = np.mean(error) * 100
             if error != 0:
