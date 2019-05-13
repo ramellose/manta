@@ -258,8 +258,8 @@ def main():
     graph = results[0]
     if args['cr']:
         perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
-                      min_clusters=args['min'], iterations=args['iter'],
-                      ratio=args['ratio'], min_cluster_size=args['ms'],
+                      min_clusters=args['min'], min_cluster_size=args['ms'],
+                      iterations=args['iter'], ratio=args['ratio'],
                       partialperms=args['perm'], relperms=args['rel'],
                       error=args['error'], verbose=args['verbose'])
     layout = None

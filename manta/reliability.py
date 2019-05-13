@@ -58,6 +58,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
+
 def central_edge(graph, percentile, permutations, error, verbose):
     """
     The min / max values that are the result of the diffusion process
@@ -313,7 +314,7 @@ def perm_edges(graph, permutations, percentile, pos, neg, error):
     return reliability
 
 
-def perm_clusters(graph, limit, max_clusters, min_clusters,
+def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
                   iterations, ratio, partialperms, relperms, error, verbose):
     """
     Calls the rewire_graph function and robustness function
@@ -327,6 +328,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
     :param limit: Percentage in error decrease until matrix is considered converged.
     :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
+    :param min_cluster_size: Minimum cluster size as fraction of network size
     :param iterations: If algorithm does not converge, it stops here.
     :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param partialperms: Number of permutations for partial diffusion.
@@ -342,9 +344,10 @@ def perm_clusters(graph, limit, max_clusters, min_clusters,
         if swapfail:
             return
         permutation, mat = cluster_graph(graph=permutation, limit=limit, max_clusters=max_clusters,
-                      min_clusters=min_clusters, iterations=iterations,
-                      ratio=ratio, edgescale=0, permutations=partialperms,
-                      verbose=False)
+                                         min_clusters=min_clusters, min_cluster_size=min_cluster_size,
+                                         iterations=iterations,
+                                         ratio=ratio, edgescale=0, permutations=partialperms,
+                                         verbose=False)
         cluster = nx.get_node_attributes(permutation, 'cluster')
         # cluster.values() has same order as permutation.nodes
         assignments.append(cluster)
