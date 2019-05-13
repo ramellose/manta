@@ -339,6 +339,20 @@ def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
     """
     assignments = list()
     rev_assignments = list()
+    if relperms is None:
+        dyadicpairs = 0
+        keys, degrees = zip(*graph.degree())  # keys, degree
+        for deg in degrees:
+            num_nodes = degrees.count(deg)
+            dyadicpairs += (num_nodes*(num_nodes-1))/2
+        numswaps = len(graph) * error
+        # given a set of possible swaps,
+        # and a desired number of swaps
+        # swaps may be repeated (a-b c-d to a-c b-d and back)
+        # possible number of permutations:
+        # p = n! / (n - r)!
+        # this number is much too large
+        relperms = dyadicpairs / numswaps
     for i in range(relperms):
         permutation, swapfail = rewire_graph(graph, error)
         if swapfail:

@@ -187,8 +187,9 @@ def set_manta():
     parser.add_argument('-rel', '--reliability_permutations',
                         dest='rel', type=int,
                         required=False,
-                        help='Number of permutation iterations for reliability estimates. Default: 100.',
-                        default=100)
+                        help='Number of permutation iterations for reliability estimates. \n '
+                             'By default, this number is estimated from the number of dyadic pairs. \n',
+                        default=None)
     parser.add_argument('-e', '--error',
                         dest='error', type=int,
                         required=False,
