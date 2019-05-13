@@ -151,7 +151,15 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
                                            'Please retry with a higher error limit. ')
                         break
         if norm:
-                updated_mat = updated_mat / abs(np.max(updated_mat))
+            with np.errstate(divide='raise', invalid='raise'):
+                try:
+                    updated_mat = updated_mat / abs(np.max(updated_mat))
+                except FloatingPointError:
+                    if verbose:
+                        logger.info('Matrix converging to zero.' + '\n' +
+                                    'Clustering with partial network. ')
+                    convergence = True
+                    break
         error = abs(updated_mat - scoremat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
         error = np.mean(error) * 100
         if norm and verbose:
