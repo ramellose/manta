@@ -254,15 +254,17 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
             iters += 1
         if memory:
             submat = firstmat
-        result.append(submat)
-        b += 1
-        if verbose:
-            logger.info("Partial diffusion " + str(b))
+        if not np.isnan(np.mean(submat)):
+            result.append(submat)
+            b += 1
+            if verbose:
+                logger.info("Partial diffusion " + str(b))
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
     for b in range(subnum):
-        posfreq[result[b] > 0] += 1
-        negfreq[result[b] < 0] += 1
+        with np.errstate(invalid='raise'):
+            posfreq[result[b] > 0] += 1
+            negfreq[result[b] < 0] += 1
     # we count how many times specific values in matrix have
     # been assigned positive or negative values
     outcome = np.zeros((len(graph), len(graph)))
