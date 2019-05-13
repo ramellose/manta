@@ -228,74 +228,72 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
         iters = 0
         max_iters = iterations
         memory = False
-        convergence = True
         error_1 = 1  # error steps 1 and 2 iterations back
         error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
-        with np.errstate(divide='raise', invalid='raise', greater='raise', less='raise'):
-            try:
-                while error > limit and iters < max_iters:
-                    # if there is no flip-flop state, the error will decrease after convergence
-                    updated_mat = np.linalg.matrix_power(submat, 2)
-                    # expansion step
-                    # in the MCL implementation, the rows are normalized to sum to 1
-                    # this creates a column stochastic matrix
-                    # here, we normalize by dividing with absolute largest value
-                    with np.errstate(divide='raise', invalid='raise'):
-                        try:
-                            updated_mat = updated_mat / abs(np.max(updated_mat))
-                        except FloatingPointError:
-                            # this indicates the matrix is busy converging to 0
-                            # in that case, we do the same as with the memory effect
-                            break
-                    # updated_mat[updated_mat > 0] = \
-                    #    updated_mat[updated_mat > 0] / \
-                    #    abs(np.max(updated_mat[updated_mat > 0]))
-                    # updated_mat[updated_mat < 0] = \
-                    #    updated_mat[updated_mat < 0] / \
-                    #    abs(np.min(updated_mat[updated_mat < 0]))
-                    # the above code scales negative and positive values separately
-                    # interestingly, the matrix does not separate correctly if used
-                    # we need to check the percentile;
-                    # if over 99% of values are close to 0,
+        while error > limit and iters < max_iters:
+            # if there is no flip-flop state, the error will decrease after convergence
+            updated_mat = np.linalg.matrix_power(submat, 2)
+            # expansion step
+            # in the MCL implementation, the rows are normalized to sum to 1
+            # this creates a column stochastic matrix
+            # here, we normalize by dividing with absolute largest value
+            with np.errstate(divide='raise', invalid='raise'):
+                try:
+                    updated_mat = updated_mat / abs(np.max(updated_mat))
+                except FloatingPointError:
                     # this indicates the matrix is busy converging to 0
                     # in that case, we do the same as with the memory effect
-                    for value in np.nditer(updated_mat, op_flags=['readwrite']):
-                        if value != 0:
-                            # normally, there is an inflation step; values are raised to a power
-                            # with this normalisation, the inflation step causes
-                            # the algorithm to converge to 0
-                            # we need above-0 values to converge to -1, and the rest to 1
-                            # previous: value * abs(value)
-                            # this inflation does not result in desired sparsity
-                            try:
-                                value[...] = value + (1/value)
-                            except RuntimeWarning:
-                                break
+                    break
+            # updated_mat[updated_mat > 0] = \
+            #    updated_mat[updated_mat > 0] / \
+            #    abs(np.max(updated_mat[updated_mat > 0]))
+            # updated_mat[updated_mat < 0] = \
+            #    updated_mat[updated_mat < 0] / \
+            #    abs(np.min(updated_mat[updated_mat < 0]))
+            # the above code scales negative and positive values separately
+            # interestingly, the matrix does not separate correctly if used
+            # we need to check the percentile;
+            # if over 99% of values are close to 0,
+            # this indicates the matrix is busy converging to 0
+            # in that case, we do the same as with the memory effect
+            with np.errstate(divide='raise', invalid='raise'):
+                for value in np.nditer(updated_mat, op_flags=['readwrite']):
+                    if value != 0:
+                        # normally, there is an inflation step; values are raised to a power
+                        # with this normalisation, the inflation step causes
+                        # the algorithm to converge to 0
+                        # we need above-0 values to converge to -1, and the rest to 1
+                        # previous: value * abs(value)
+                        # this inflation does not result in desired sparsity
+                        try:
+                            value[...] = value + (1/value)
+                        except FloatingPointError:
+                            break
+            with np.errstate(divide='raise', invalid='raise'):
+                try:
                     updated_mat = updated_mat / abs(np.max(updated_mat))
-                    error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
-                    error = np.mean(error) * 100
-                    if error != 0:
-                        if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
-                            # if there is a flip-flop state, the error will alternate between two values
-                            max_iters = iters + 5
-                            memory = True
-                    else:
-                        break
-                    error_2 = error_1
-                    error_1 = error
-                    submat = updated_mat
-                    if iters == 0:
-                        firstmat = updated_mat
-                    diffs.append(submat)
-                    iters += 1
-                if memory:
-                    submat = firstmat
-                result.append(submat)
-                b += 1
-            except FloatingPointError:
-                # this indicates the matrix is busy converging to 0
-                # in that case, we do the same as with the memory effect
+                except FloatingPointError:
+                    break
+            error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
+            error = np.mean(error) * 100
+            if error != 0:
+                if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+                    # if there is a flip-flop state, the error will alternate between two values
+                    max_iters = iters + 5
+                    memory = True
+            else:
                 break
+            error_2 = error_1
+            error_1 = error
+            submat = updated_mat
+            if iters == 0:
+                firstmat = updated_mat
+            diffs.append(submat)
+            iters += 1
+        if memory:
+            submat = firstmat
+        result.append(submat)
+        b += 1
         if verbose:
             logger.info("Partial diffusion " + str(b))
     posfreq = np.zeros((len(graph), len(graph)))
