@@ -204,7 +204,9 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     # this fraction can be set to 0.8 or higher, gives good results
     # results in file manta_ratio_perm.csv
     result = list()
-    subnum = permutations  # number of subnetworks generated
+    subnum = len(graph)
+    if permutations:
+        subnum = permutations  # number of subnetworks generated
     b = 0
     while b < subnum:
         with np.seterr(divide='ignore', over='ignore', invalid='ignore'):

@@ -166,8 +166,8 @@ def set_manta():
                         dest='perm', type=int,
                         required=False,
                         help='Number of permutation iterations for '
-                             'network subsetting during partial iterations. Default: 100.',
-                        default=100)
+                             'network subsetting during partial iterations. Default: number of nodes.',
+                        default=None)
     parser.add_argument('-ratio', '--stability_ratio',
                         dest='ratio', type=float,
                         required=False,
