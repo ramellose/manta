@@ -144,7 +144,7 @@ def set_manta():
                         dest='ms', type=float,
                         required=False,
                         help='Minimum cluster size as fraction of network size. Default: 0.1.',
-                        default=0.1)
+                        default=0.2)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
                         required=False,
@@ -249,7 +249,10 @@ def main():
     else:
         network = nx.to_undirected(network)
     if args['bin']:
+        orig_edges = dict()
+        # store original edges for export
         for edge in network.edges:
+            orig_edges[edge] = network.edges[edge]['weight']
             network.edges[edge]['weight'] = np.sign(network.edges[edge]['weight'])
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
                             min_clusters=args['min'], min_cluster_size=args['ms'],
@@ -264,6 +267,9 @@ def main():
                       partialperms=args['perm'], relperms=args['rel'],
                       error=args['error'], verbose=args['verbose'])
     layout = None
+    if args['bin']:
+        for edge in network.edges:
+            network.edges[edge]['weight'] = orig_edges[edge]
     if args['layout']:
         layout = generate_layout(graph, args['tax'])
     if args['f'] == 'graphml':
