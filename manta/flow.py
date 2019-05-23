@@ -151,10 +151,15 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
         if norm and verbose:
             logger.info('Current error: ' + str(error))
         try:
-            if (error_2 / error > 0.99) and (error_2 / error < 1.01) or np.isnan(error) and not memory:
+            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
                 # if there is a flip-flop state, the error will alternate between two values
                 if verbose:
                     logger.info('Detected memory effect at iteration: ' + str(iters))
+                memory = True
+                iterations = iters + 5
+            if np.isnan(error) and not memory:
+                if verbose:
+                    logger.info('Error calculation failed at iteraiton: ' + str(iters))
                 memory = True
                 iterations = iters + 5
         except RuntimeWarning:
