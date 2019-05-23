@@ -115,10 +115,10 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         weak_dict = dict()
         for node in graph.nodes:
             if adj_index[node] in weak_nodes:
-                weak_dict[node] = 'Weak'
+                weak_dict[node] = 'weak'
             else:
-                weak_dict[node] = 'Strong'
-            nx.set_node_attributes(graph, values=weak_dict, name='Assignment')
+                weak_dict[node] = 'strong'
+            nx.set_node_attributes(graph, values=weak_dict, name='assignment')
     nx.set_node_attributes(graph, values=bestcluster, name='cluster')
     return graph, scoremat
 
