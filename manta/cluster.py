@@ -201,9 +201,13 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     :param verbose: Verbosity level of function
     :return: Dictionary of nodes with cluster assignments
     """
-    randomclust = np.random.randint(2, size=len(scoremat))
+    # get the mean of 100 assignments
+    randomscores = list()
+    for i in range(100):
+        randomclust = np.random.randint(2, size=len(scoremat))
+        randomscores.append(sparsity_score(graph, randomclust, rev_index))
     scores = dict()
-    scores['random'] = (sparsity_score(graph, randomclust, rev_index))
+    scores['random'] = np.mean(randomscores)
     if verbose:
         logger.info('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']))
     bestclusters = dict()

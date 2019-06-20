@@ -297,3 +297,71 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     outcome = outcome / abs(np.max(outcome))
     return outcome, result
 
+
+def harary_balance(graph):
+    """
+    Checks whether a graph is balanced according to Harary's theorem.
+    Python implementation of the algorithm as described in the article below.
+    Harary's algorithm quickly finds whether a signed graph is balanced.
+    A signed graph is balanced if the product of edge signs around
+    every circle is positive.
+
+    Harary, F., & Kabell, J. A. (1980).
+    A simple algorithm to detect balance in signed graphs.
+    Mathematical Social Sciences, 1(1), 131-136.
+    :param graph: NetworkX graph
+    :return: True if the tree is balanced, False otherwise.
+    """
+    # Step 1: Select a spanning tree T
+    tree = nx.algorithms.minimum_spanning_tree(graph)
+    marks = dict.fromkeys(tree.nodes)
+    lines = dict.fromkeys(graph.edges)
+    # Step 2: Root T at an arbitrary point v0
+    root = sample(tree.nodes, 1)
+    # Step 3: Mark v0 positive
+    marks[root[0]] = 1.0
+    balance = True
+    while not all(lines.values()):
+        # Step 7: Is there a line that has not been tested?
+        while not all(marks.values()):
+            # Step 6: Is there a value that has not been tested?
+            step4 = False
+            while not step4:
+                # Step 4: Select an unsigned point adjacent in T to a signed point
+                # get all unsigned nodes
+                unsigned = [i for i in marks if not marks[i]]
+                # find an unsigned node that is a neighbour of a signed node
+                signed = [i for i in marks if marks[i]]
+                for unsign in unsigned:
+                    match = set(nx.neighbors(tree, unsign)).intersection(signed)
+                    if len(match) > 0:
+                        step4 = True
+                        match = sample(match, 1)[0]
+                        # Step 5: Label the selected point with the product
+                        # of the sign of the previously point to which it is
+                        # adjacent in T and the sign of the line joining them
+                        marks[unsign] = marks[match] * tree[match][unsign]['weight']
+                        try:
+                            lines[(unsign, match)] = True
+                        except KeyError:
+                            lines[(match, unsign)] = True
+        # Step 8: Select an untested line of S - E(T)
+        untested = sample([i for i in lines if not lines[i]], 1)[0]
+        # Step 9: Is the sign of the selected line equal to the product
+        # of the signs of its two points?
+        untested_sign = marks[untested[0]] * marks[untested[1]]
+        if untested_sign == graph.edges[untested]['weight']:
+            lines[untested] = True
+        else:
+            # Step 10: Stop, S is not balanced
+            balance = False
+            break
+    if balance:
+        logger.info("Graph is balanced according to Harary's theorem!")
+    else:
+        logger.info("Graph is unbalanced according to Harary's theorem! ")
+    return balance
+
+
+
+
