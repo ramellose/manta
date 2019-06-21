@@ -233,8 +233,8 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         # this can give multiple connected components
         balanced = harary_components(subgraph, verbose=False)
         # if there is a balanced component, carry out network flow separately
+        balanced_matrix = np.copy(scoremat)
         if any(balanced.values()):
-            balanced_matrix = np.copy(scoremat)
             balanced_components = [x for x in balanced if balanced[x]]
             for component in balanced_components:
                 # get score matrix for balanced component
