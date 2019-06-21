@@ -88,17 +88,18 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         adj_index[list(graph.nodes)[i]] = i
     rev_index = {v: k for k, v in adj_index.items()}
     # next part is to define scoring matrix
+    balanced = [False]
     if nx.is_directed(graph):  # not recommended
         scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
     elif not nx.is_directed(graph):
-        if all(harary_components(graph, verbose=True)).values():
-            scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+        balanced = harary_components(graph, verbose=True).values()
+        if all(balanced):
+            scoremat = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)[0]
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
-        if memory:
+        else:
             if verbose:
-                logger.info("Memory effect, convergence to 0 or failure to converge detected. \n "
-                            "Switching to partial diffusion.")
+                logger.info("Carrying out diffusion on partial graphs. ")
             # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
             scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit, subset=subset,
                                                    ratio=ratio, permutations=permutations, verbose=verbose)
@@ -110,7 +111,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
                                max_clusters=max_clusters,
                                min_clusters=min_clusters, min_cluster_size=min_cluster_size, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
-    if memory:
+    if not all(balanced):
         weak_nodes = cluster_weak(graph, diffs=diffs, cluster=flatcluster,
                                   edgescale=edgescale,
                                   adj_index=adj_index, rev_index=rev_index, verbose=verbose)
