@@ -89,9 +89,8 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     rev_index = {v: k for k, v in adj_index.items()}
     # next part is to define scoring matrix
     balanced = [False]
-    if nx.is_directed(graph):  # not recommended
-        scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
-    elif not nx.is_directed(graph):
+    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+    if not nx.is_directed(graph):
         balanced = harary_components(graph, verbose=True).values()
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
