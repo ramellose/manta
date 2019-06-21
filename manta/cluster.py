@@ -93,11 +93,9 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
     elif not nx.is_directed(graph):
         balanced = harary_components(graph, verbose=True).values()
-        if all(balanced):
-            scoremat = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)[0]
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
-        else:
+        if not all(balanced):
             if verbose:
                 logger.info("Carrying out diffusion on partial graphs. ")
             # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
