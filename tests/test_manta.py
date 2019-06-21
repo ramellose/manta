@@ -11,7 +11,7 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manta.cluster import cluster_graph, sparsity_score, cluster_weak, cluster_hard, _cluster_vector
-from manta.flow import diffusion, harary_balance
+from manta.flow import diffusion, harary_balance, harary_components
 from manta.reliability import central_edge, central_node, rewire_graph, perm_edges
 from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
@@ -181,7 +181,7 @@ class TestMain(unittest.TestCase):
         for i in range(len(graph.nodes)):
             adj_index[list(graph.nodes)[i]] = i
         rev_index = {v: k for k, v in adj_index.items()}
-        scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+        scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
         bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                    max_clusters=max_clusters, min_clusters=min_clusters,
                                    min_cluster_size=min_cluster_size, verbose=verbose)
@@ -284,6 +284,13 @@ class TestMain(unittest.TestCase):
         """
         harary = harary_balance(g)
         self.assertTrue(harary)
+
+    def test_harary_components_true(self):
+        """
+        Checks whether the harary_balance function correctly returns True.
+        """
+        harary = harary_components(g, verbose=False)
+        self.assertTrue(all(harary.values()))
 
     def test_harary_balance_false(self):
         """
