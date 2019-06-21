@@ -227,6 +227,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         # only add 1 to b if below snippet completes
         # otherwise, keep iterating
         indices = sample(graph.nodes, nums)
+        num_indices = [mat_index[i] for i in indices]
         subgraph = nx.subgraph(graph, indices)
         # we randomly sample from the nodes and create a subgraph from this
         # this can give multiple connected components
@@ -248,8 +249,8 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
                         balanced_matrix[mat_ids[0], mat_ids[1]] = partial_score[i,j]
         # carry out 1 step propagation on entire matrix
         submat = np.copy(scoremat)
-        submat[indices, :] = 0
-        submat[:, indices] = 0
+        submat[num_indices, :] = 0
+        submat[:, num_indices] = 0
         # if there is no flip-flop state, the error will decrease after convergence
         updated_mat = np.linalg.matrix_power(submat, 2)
         updated_mat = updated_mat / np.max(abs(updated_mat))
