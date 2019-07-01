@@ -237,17 +237,18 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         if any(balanced.values()):
             balanced_components = [x for x in balanced if balanced[x]]
             for component in balanced_components:
-                # get score matrix for balanced component
-                partial_score = diffusion(graph=component, limit=limit,
-                                          iterations=iterations, verbose=False)[0]
-                # map score matrix to balanced_matrix
-                for i in range(partial_score.shape[0]):
-                    for j in range(partial_score.shape[0]):
-                        node_ids = [list(component.nodes)[i],
-                                    list(component.nodes)[j]]
-                        mat_ids = [mat_index[node] for node in node_ids]
-                        balanced_matrix[mat_ids[0], mat_ids[1]] = partial_score[i,j]
-        # carry out 1 step propagation on entire matrix
+                if len(component) > 0.1 ( len(graph)):
+                    # get score matrix for balanced component
+                    partial_score = diffusion(graph=component, limit=limit,
+                                              iterations=iterations, verbose=False)[0]
+                    # map score matrix to balanced_matrix
+                    for i in range(partial_score.shape[0]):
+                        for j in range(partial_score.shape[0]):
+                            node_ids = [list(component.nodes)[i],
+                                        list(component.nodes)[j]]
+                            mat_ids = [mat_index[node] for node in node_ids]
+                            balanced_matrix[mat_ids[0], mat_ids[1]] = partial_score[i,j]
+            # carry out 1 step propagation on entire matrix
         submat = np.copy(scoremat)
         submat[num_indices, :] = 0
         submat[:, num_indices] = 0
