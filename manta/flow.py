@@ -237,7 +237,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         if any(balanced.values()):
             balanced_components = [x for x in balanced if balanced[x]]
             for component in balanced_components:
-                if len(component) > 0.1 ( len(graph)):
+                if len(component) > 0.1 * len(graph):
                     # get score matrix for balanced component
                     partial_score = diffusion(graph=component, limit=limit,
                                               iterations=iterations, verbose=False)[0]
