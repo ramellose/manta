@@ -254,7 +254,12 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         submat[:, num_indices] = 0
         # if there is no flip-flop state, the error will decrease after convergence
         updated_mat = np.linalg.matrix_power(submat, 2)
-        updated_mat = updated_mat / np.max(abs(updated_mat))
+        if not np.isnan(updated_mat).any():
+            # it is possible that a feature reaches nan
+            # in this case, iteration is repeated
+            updated_mat = updated_mat / np.max(abs(updated_mat))
+        else:
+            break
         for value in np.nditer(updated_mat, op_flags=['readwrite']):
             if value != 0:
                 value[...] = value + (1 / value)
