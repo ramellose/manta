@@ -1,6 +1,6 @@
 # _manta_ ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
 
-Microbial association network clustering algorithm. Version 0.2.0.
+Microbial association network clustering algorithm. Version 0.3.0.
 
 [![Build Status](https://travis-ci.com/ramellose/manta.svg?token=9mhqeTh13MErxyrk5zR8&branch=master)](https://travis-ci.com/ramellose/manta)
 
