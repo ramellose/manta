@@ -168,6 +168,12 @@ def set_manta():
                         help='Number of permutation iterations for '
                              'network subsetting during partial iterations. Default: number of nodes.',
                         default=None)
+    parser.add_argument('-subset', '--subset_fraction',
+                        dest='subset', type=float,
+                        required=False,
+                        help='Fraction of edges that are used for subsetting'
+                             ' if the input graph is not balanced. ',
+                        default=0.8)
     parser.add_argument('-ratio', '--stability_ratio',
                         dest='ratio', type=float,
                         required=False,
@@ -256,7 +262,7 @@ def main():
             network.edges[edge]['weight'] = np.sign(network.edges[edge]['weight'])
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
                             min_clusters=args['min'], min_cluster_size=args['ms'],
-                            iterations=args['iter'],
+                            iterations=args['iter'], subset=args['subset'],
                             ratio=args['ratio'], edgescale=args['edgescale'],
                             permutations=args['perm'], verbose=args['verbose'])
     graph = results[0]

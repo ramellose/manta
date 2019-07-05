@@ -11,7 +11,7 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manta.cluster import cluster_graph, sparsity_score, cluster_weak, cluster_hard, _cluster_vector
-from manta.flow import diffusion
+from manta.flow import diffusion, harary_balance, harary_components
 from manta.reliability import central_edge, central_node, rewire_graph, perm_edges
 from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
@@ -75,6 +75,24 @@ weights[("OTU_8", "OTU_9")] = float(1.0)
 weights[("OTU_9", "OTU_5")] = float(1.0)
 nx.set_edge_attributes(directg, values=weights, name='weight')
 
+unbalanced_g = nx.Graph()
+# example graph from Harary publication
+nodes = ["v1", "v2", "v3", "v4", "v5", "v6"]
+unbalanced_g.add_nodes_from(nodes)
+unbalanced_g.add_edges_from([("v1", "v2"), ("v2", "v3"),
+                             ("v2", "v4"), ("v3", "v4"),
+                             ("v3", "v5"), ("v4", "v6"),
+                             ("v5", "v6"), ("v1", "v3")])
+weights = dict()
+weights[("v1", "v2")] = float(1.0)
+weights[("v2", "v3")] = float(-1.0)
+weights[("v2", "v4")] = float(-1.0)
+weights[("v3", "v4")] = float(1.0)
+weights[("v3", "v5")] = float(-1.0)
+weights[("v4", "v6")] = float(1.0)
+weights[("v5", "v6")] = float(-1.0)
+weights[("v1", "v3")] = float(1.0)
+nx.set_edge_attributes(unbalanced_g, values=weights, name='weight')
 
 limit = 2
 min_clusters = 2
@@ -88,6 +106,7 @@ rel = 100
 error = 0.1
 edgescale = 0.5
 ratio = 0.7
+subset = 0.8
 verbose = True
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species
@@ -112,7 +131,7 @@ class TestMain(unittest.TestCase):
     def test_bootstrap(self):
         """Checks if reliability scores for the graph are returned. """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         # calculates the ratio of positive / negative weights
         # note that ratios need to be adapted, because the matrix is symmetric
         matrix = results[1]
@@ -131,7 +150,7 @@ class TestMain(unittest.TestCase):
         are not stable.
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         hubs = nx.get_edge_attributes(graph, 'hub')
@@ -146,22 +165,24 @@ class TestMain(unittest.TestCase):
         no nodes are identified as hubs (actually the p-value is too low).
         """
         results = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         graph = results[0]
         central_edge(graph, percentile, permutations, error, verbose)
         central_node(graph)
         self.assertEqual(len(nx.get_node_attributes(graph, 'hub')), 0)
 
     def test_cluster_weak(self):
-        """Cluster_hard is already tested through the regular cluster_graph function.
+        """
+        Cluster_hard is already tested through the regular cluster_graph function.
         To test cluster_weak, this function carries out clustering as
-        if a memory effect has been detected."""
+        if a memory effect has been detected.
+        """
         graph = deepcopy(g)
         adj_index = dict()
         for i in range(len(graph.nodes)):
             adj_index[list(graph.nodes)[i]] = i
         rev_index = {v: k for k, v in adj_index.items()}
-        scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+        scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
         bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                    max_clusters=max_clusters, min_clusters=min_clusters,
                                    min_cluster_size=min_cluster_size, verbose=verbose)
@@ -173,9 +194,11 @@ class TestMain(unittest.TestCase):
         self.assertEqual(len(bestcluster), 0)
 
     def test_cluster_manta(self):
-        """Checks whether the correct cluster IDs are assigned. """
+        """
+        Checks whether the correct cluster IDs are assigned.
+        """
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(clusters['OTU_10'], clusters['OTU_6'])
 
@@ -184,7 +207,7 @@ class TestMain(unittest.TestCase):
         Checks whether the main function carries out both clustering and centrality estimates.
         """
         clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         graph = clustered_graph[0]
         central_edge(graph, percentile, rel,
                      error, verbose)
@@ -199,36 +222,46 @@ class TestMain(unittest.TestCase):
         on a DiGraph.
         """
         clustered_graph = cluster_graph(deepcopy(directg), limit, max_clusters, min_clusters,
-                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+                                        min_cluster_size, iterations, subset, ratio, edgescale, permutations, verbose)
         clusters = nx.get_node_attributes(clustered_graph[0], 'cluster')
         self.assertEqual(len(clusters), 10)
 
     def test_diffuse_graph(self):
-        """Checks if the diffusion process operates correctly. """
+        """
+        Checks if the diffusion process operates correctly.
+        """
         new_adj = diffusion(g, iterations=iterations, limit=limit, verbose=verbose)[0]
         self.assertNotEqual(np.mean(new_adj), 0)
 
     def test_layout(self):
-        """Checks whether the layout function returns a dictionary of coordinates."""
-        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters,
-                                        min_cluster_size, iterations, ratio, edgescale, permutations, verbose)
+        """
+        Checks whether the layout function returns a dictionary of coordinates.
+        """
+        clustered_graph = cluster_graph(deepcopy(g), limit, max_clusters, min_clusters, min_cluster_size,
+                                        iterations, subset, ratio, edgescale, permutations, verbose)
         coords = generate_layout(clustered_graph[0])
         self.assertEqual(len(coords[list(coords.keys())[0]]), 2)
 
     def test_rewire_graph_difference(self):
-        """Checks if the resulting graph is permuted. """
+        """
+        Checks if the resulting graph is permuted.
+        """
         null = rewire_graph(g, error)[0]
         self.assertNotEqual(list(null.edges), list(g.edges))
 
     def test_rewire_graph_equal(self):
-        """Checks if a permuted graph with identical number of edges is generated. """
+        """
+        Checks if a permuted graph with identical number of edges is generated.
+        """
         null = rewire_graph(g, error)[0]
         self.assertEqual(len(null.edges), len(g.edges))
 
     def test_sparsity_score(self):
-        """Checks whether correct sparsity scores are calculated.
+        """
+        Checks whether correct sparsity scores are calculated.
         Because this network has 3 negative edges separating
-        2 clusters, the score should be -3 + the penalty of 2000. """
+        2 clusters, the score should be -3 + the penalty of 2000.
+        """
         scoremat = diffusion(g, limit, iterations, verbose)[0]
         clusters = KMeans(2).fit_predict(scoremat)
         adj_index = dict()
@@ -239,11 +272,33 @@ class TestMain(unittest.TestCase):
         self.assertEqual(int(sparsity), 1)
 
     def test_tax_weights(self):
-        """Checks whether the tax weights for the edges are correctly calculated."""
+        """
+        Checks whether the tax weights for the edges are correctly calculated.
+        """
         tax_graph = deepcopy(g)
         tax_graph = generate_tax_weights(tax_graph, tax)
         self.assertEqual(tax_graph['OTU_1']['OTU_2']['tax_score'], 2)
 
+    def test_harary_balance_true(self):
+        """
+        Checks whether the harary_balance function correctly returns True.
+        """
+        harary = harary_balance(g)
+        self.assertTrue(harary)
+
+    def test_harary_components_true(self):
+        """
+        Checks whether the harary_balance function correctly returns True.
+        """
+        harary = harary_components(g, verbose=False)
+        self.assertTrue(all(harary.values()))
+
+    def test_harary_balance_false(self):
+        """
+        Checks whether the harary_balance function correctly returns False.
+        """
+        harary = harary_balance(unbalanced_g)
+        self.assertFalse(harary)
 
 
 if __name__ == '__main__':

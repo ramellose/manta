@@ -30,7 +30,7 @@ import numpy as np
 # from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
-from manta.flow import diffusion, partial_diffusion
+from manta.flow import diffusion, partial_diffusion, harary_components
 from itertools import combinations, chain
 from copy import deepcopy
 import os
@@ -60,8 +60,9 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
+
 def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
-                  iterations, ratio, edgescale, permutations, verbose):
+                  iterations, subset, ratio, edgescale, permutations, verbose):
     """
     Takes a networkx graph and carries out network clustering.
     The returned graph contains cluster assignments and weak assignments.
@@ -75,6 +76,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.
     :param min_cluster_size: Minimum cluster size as fraction of network size
     :param iterations: If algorithm does not converge, it stops here.
+    :param subset: Fraction of edges used in subsetting procedure
     :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param edgescale: Mean edge weight for node removal
     :param permutations: Number of permutations for partial iterations
@@ -85,33 +87,31 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
     rev_index = {v: k for k, v in adj_index.items()}
-    # next part is to define clusters of the adj matrix
-    # cluster number is defined through gap statistic
-    # max cluster number to test is by default 5
-    # define topscore and bestcluster for no cluster
-    scoremat, memory, convergence, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
-    if (memory or convergence) and not nx.is_directed(graph):
+    # next part is to define scoring matrix
+    balanced = [False]
+    scoremat, memory, diffs = diffusion(graph=graph, limit=limit, iterations=iterations, verbose=verbose)
+    if not nx.is_directed(graph):
+        balanced = harary_components(graph, verbose=verbose).values()
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
-        if verbose:
-            logger.info("Memory effect, convergence to 0 or failure to converge detected. \n "
-                        "Switching to partial diffusion.")
-        # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
-        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit,
-                                               ratio=ratio, permutations=permutations, verbose=verbose)
+        if not all(balanced):
+            if verbose:
+                logger.info("Carrying out diffusion on partial graphs. ")
+            # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
+            scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit, subset=subset,
+                                                   ratio=ratio, permutations=permutations, verbose=verbose)
     bestcluster = None
     # the randomclust is a random separation into two clusters
-    # if K-means can't beat this, the user is given a warning
+    # if clustering can't beat this, the user is given a warning
     # select optimal cluster by sparsity score
-    #if not memory:
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters,
                                min_clusters=min_clusters, min_cluster_size=min_cluster_size, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
-    if memory or convergence:
+    if not all(balanced):
         weak_nodes = cluster_weak(graph, diffs=diffs, cluster=flatcluster,
-                                    edgescale=edgescale,
-                                    adj_index=adj_index, rev_index=rev_index, verbose=verbose)
+                                  edgescale=edgescale,
+                                  adj_index=adj_index, rev_index=rev_index, verbose=verbose)
         weak_dict = dict()
         for node in graph.nodes:
             if adj_index[node] in weak_nodes:
@@ -201,9 +201,13 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     :param verbose: Verbosity level of function
     :return: Dictionary of nodes with cluster assignments
     """
-    randomclust = np.random.randint(2, size=len(scoremat))
+    # get the mean of 100 assignments
+    randomscores = list()
+    for i in range(100):
+        randomclust = np.random.randint(2, size=len(scoremat))
+        randomscores.append(sparsity_score(graph, randomclust, rev_index))
     scores = dict()
-    scores['random'] = (sparsity_score(graph, randomclust, rev_index))
+    scores['random'] = np.mean(randomscores)
     if verbose:
         logger.info('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']))
     bestclusters = dict()

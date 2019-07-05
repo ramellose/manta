@@ -84,6 +84,11 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     If a memory effect is detected, not the outcome matrix but the first iteration is returned.
     Additionally, 5 iterations after the flip-flop state has been reached are calculated.
 
+    Normally, memory effects should not be detected because these only happen
+    if the graph is unbalanced.
+    The Harary algorithm is used to check whether graphs are unbalanced.
+    If they are, this diffusion process should not be run.
+
     Parameters
     ----------
     :param graph: NetworkX graph of a microbial assocation network
@@ -92,14 +97,13 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     :param verbose: Verbosity level of function
     :param norm: Normalize values so they converge to -1 or 1
     :param inflation: Carry out network diffusion with/without inflation
-    :return: score matrix, memory effect, initial diffusion matrix
+    :return: score matrix, memory effect
     """
     scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
     error = 100
     diffs = list()
     iters = 0
     memory = False
-    convergence = False
     error_1 = 1  # error steps 1 and 2 iterations back
     error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
     while error > limit and iters < iterations:
@@ -151,19 +155,20 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
         if norm and verbose:
             logger.info('Current error: ' + str(error))
         try:
-            if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
-                # if there is a flip-flop state, the error will alternate between two values
-                if verbose:
-                    logger.info('Detected memory effect at iteration: ' + str(iters))
-                memory = True
-                iterations = iters + 5
+            if error != 0:
+                if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
+                    # if there is a flip-flop state, the error will alternate between two values
+                    if verbose:
+                        logger.info('Detected memory effect at iteration: ' + str(iters))
+                    memory = True
+                    iterations = iters + 5
             if np.isnan(error) and not memory:
                 if verbose:
                     logger.info('Error calculation failed at iteraiton: ' + str(iters))
                 memory = True
                 iterations = iters + 5
         except RuntimeWarning:
-            convergence = True
+            memory = True
             if verbose:
                 logger.info('Matrix converged to zero.' + '\n' +
                             'Clustering with partial network. ')
@@ -172,8 +177,8 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
         scoremat = updated_mat
         if iters == 0:
             firstmat = updated_mat
-        diffs.append(scoremat)
         iters += 1
+        diffs.append(scoremat)
     if memory or np.any(np.isnan(scoremat)):
         diffs = diffs[-5:]
         scoremat = firstmat
@@ -182,30 +187,36 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
         if verbose:
             logger.info('Matrix failed to converge.' + '\n' +
                         'Clustering with partial network. ')
-    return scoremat, memory, convergence, diffs
+    return scoremat, memory, diffs
 
 
-def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
+def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, verbose):
     """
     Partial diffusion process for generation of scoring matrix.
     Some matrices may be unable to reach convergence
     or enter a flip-flopping state.
     A partial diffusion process can still discover relationships
     between unlinked taxa when this is not possible.
+
+    The partial diffusion process takes a random subgraph and
+    checks whether this subgraph is balanced. If it is, the full diffusion process
+    is carried out. Otherwise, one iteration is carried out.
+
     Parameters
     ----------
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
+    :param subset: Fraction of edges used in subsetting procedure
     :param ratio: Ratio of positive / negative edges required for edge stability
     :param permutations: Number of permutations for network subsetting
     :param verbose: Verbosity level of function
     :return: score matrix, memory effect, initial diffusion matrix
     """
-    scoremat = nx.to_numpy_array(graph)  # numpy matrix is deprecated
-    # this internal parameter is currently set to 80%; maybe test adjustments?
-    # nonlinear behaviour of ratio implies that this var may not be so important
-    nums = int(len(graph)/5)*4  # fraction of edges in subnetwork set to 0
+    # scoremat indices are ordered by graph.nodes()
+    scoremat = nx.to_numpy_array(graph)
+    mat_index = {list(graph.nodes)[i]: i for i in range(len(graph.nodes))}
+    nums = int(len(graph)*subset)  # fraction of edges in subnetwork set to 0
     # this fraction can be set to 0.8 or higher, gives good results
     # results in file manta_ratio_perm.csv
     result = list()
@@ -216,59 +227,53 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
     while b < subnum:
         # only add 1 to b if below snippet completes
         # otherwise, keep iterating
-        # runtime warnings from the diffusion function are a problem
-        # runtime warnings here are likely a result of the permutation
-        indices = sample(range(len(graph)), nums)
-        # we randomly sample from the indices and create a subgraph from this
+        indices = sample(graph.nodes, nums)
+        num_indices = [mat_index[i] for i in indices]
+        subgraph = nx.subgraph(graph, indices)
+        # we randomly sample from the nodes and create a subgraph from this
+        # this can give multiple connected components
+        balanced = harary_components(subgraph, verbose=False)
+        # if there is a balanced component, carry out network flow separately
+        balanced_matrix = np.copy(scoremat)
+        if any(balanced.values()):
+            balanced_components = [x for x in balanced if balanced[x]]
+            for component in balanced_components:
+                if len(component) > 0.1 * len(graph):
+                    # get score matrix for balanced component
+                    partial_score = diffusion(graph=component, limit=limit,
+                                              iterations=iterations, verbose=False)[0]
+                    # map score matrix to balanced_matrix
+                    for i in range(partial_score.shape[0]):
+                        for j in range(partial_score.shape[0]):
+                            node_ids = [list(component.nodes)[i],
+                                        list(component.nodes)[j]]
+                            mat_ids = [mat_index[node] for node in node_ids]
+                            balanced_matrix[mat_ids[0], mat_ids[1]] = partial_score[i,j]
+            # carry out 1 step propagation on entire matrix
         submat = np.copy(scoremat)
-        submat[indices, :] = 0
-        submat[:, indices] = 0
-        error = 100
-        diffs = list()
-        iters = 0
-        max_iters = iterations
-        memory = False
-        error_1 = 1  # error steps 1 and 2 iterations back
-        error_2 = 1  # detects flip-flop effect; normal clusters can also increase in error first
-        while error > limit and iters < max_iters:
-            # if there is no flip-flop state, the error will decrease after convergence
-            updated_mat = np.linalg.matrix_power(submat, 2)
-            if np.max(updated_mat) == 0:
-                    # this indicates the matrix is busy converging to 0
-                    # in that case, we do the same as with the memory effect
-                    break
-            else:
-                updated_mat = updated_mat / np.max(abs(updated_mat))
-            for value in np.nditer(updated_mat, op_flags=['readwrite']):
-                if value != 0:
-                    value[...] = value + (1/value)
-            if not np.isnan(updated_mat).any():
-                updated_mat = updated_mat / np.max(abs(updated_mat))
-            else:
-                break
-            error = abs(updated_mat - submat)[np.where(updated_mat != 0)] / abs(updated_mat[np.where(updated_mat != 0)])
-            error = np.mean(error) * 100
-            if error != 0:
-                if (error_2 / error > 0.99) and (error_2 / error < 1.01) and not memory:
-                    # if there is a flip-flop state, the error will alternate between two values
-                    max_iters = iters + 5
-                    memory = True
-            else:
-                break
-            error_2 = error_1
-            error_1 = error
-            submat = updated_mat
-            if iters == 0:
-                firstmat = updated_mat
-            diffs.append(submat)
-            iters += 1
-        if memory:
-            submat = firstmat
-        if not np.isnan(submat).any():
-            result.append(submat)
-            b += 1
-            if verbose:
-                logger.info("Partial diffusion " + str(b))
+        submat[num_indices, :] = 0
+        submat[:, num_indices] = 0
+        # if there is no flip-flop state, the error will decrease after convergence
+        updated_mat = np.linalg.matrix_power(submat, 2)
+        if not np.isnan(updated_mat).any() and not np.max(abs(updated_mat)) == 0:
+            # it is possible that a feature reaches nan
+            # in this case, iteration is repeated
+            updated_mat = updated_mat / np.max(abs(updated_mat))
+        else:
+            break
+        for value in np.nditer(updated_mat, op_flags=['readwrite']):
+            if value != 0:
+                value[...] = value + (1 / value)
+        updated_mat = updated_mat / np.max(abs(updated_mat))
+        # the permutation matrix is a combination of balanced components
+        # and a propagation step (1-step expansion + inflation)
+        updated_mat = updated_mat + balanced_matrix
+        # normalize again
+        updated_mat = updated_mat / np.max(abs(updated_mat))
+        result.append(updated_mat)
+        b += 1
+        if verbose:
+            logger.info("Partial diffusion " + str(b))
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
     for b in range(subnum):
@@ -296,4 +301,104 @@ def partial_diffusion(graph, iterations, limit, ratio, permutations, verbose):
         outcome[neg_results] += neg_sums
     outcome = outcome / abs(np.max(outcome))
     return outcome, result
+
+
+def harary_components(graph, verbose):
+    """
+    This wrapper for the balance test can accept graphs
+    that consist of multiple  connected components.
+
+    :param graph: NetworkX graph
+    :param verbose: Prints result of test to logger if True
+    :return: Returns a dictionary with connected components as keys;
+             components that are balanced have a True value.
+    """
+    all_components = [graph]
+    component_balance = dict()
+    if not nx.is_connected(graph):
+        all_components = []
+        component_generator = nx.connected_components(graph)
+        for component in component_generator:
+            if len(component) > 1:
+                all_components.append(nx.subgraph(graph, component))
+    for component in all_components:
+        component_balance[component] = harary_balance(component)
+    if verbose:
+        if all(component_balance.values()) and len(component_balance.values()) == 1:
+            logger.info("Graph is balanced.")
+        elif all(component_balance.values()):
+            logger.info("All connected components of the graph are balanced.")
+        elif any(component_balance.values()):
+            logger.info("At least one connected component of the graph"
+                        " is balanced.")
+        else:
+            logger.info("Graph is unbalanced.")
+    return component_balance
+
+
+def harary_balance(graph):
+    """
+    Checks whether a graph is balanced according to Harary's theorem.
+    Python implementation of the algorithm as described in the article below.
+    Harary's algorithm quickly finds whether a signed graph is balanced.
+    A signed graph is balanced if the product of edge signs around
+    every circle is positive.
+
+    Harary, F., & Kabell, J. A. (1980).
+    A simple algorithm to detect balance in signed graphs.
+    Mathematical Social Sciences, 1(1), 131-136.
+    :param graph: NetworkX graph
+    :return: Returns a dictionary with connected components as keys;
+             components that are balanced have a True value.
+    """
+    # Step 1: Select a spanning tree T
+    balance = True
+    tree = nx.algorithms.minimum_spanning_tree(graph)
+    marks = dict.fromkeys(tree.nodes)
+    lines = dict.fromkeys(graph.edges)
+    # Step 2: Root T at an arbitrary point v0
+    root = sample(tree.nodes, 1)
+    # Step 3: Mark v0 positive
+    marks[root[0]] = 1.0
+    balance = True
+    while not all(lines.values()):
+        # Step 7: Is there a line that has not been tested?
+        while not all(marks.values()):
+            # Step 6: Is there a value that has not been tested?
+            step4 = False
+            while not step4:
+                # Step 4: Select an unsigned point adjacent in T to a signed point
+                # get all unsigned nodes
+                unsigned = [i for i in marks if not marks[i]]
+                # find an unsigned node that is a neighbour of a signed node
+                signed = [i for i in marks if marks[i]]
+                for unsign in unsigned:
+                    match = set(nx.neighbors(tree, unsign)).intersection(signed)
+                    if len(match) > 0:
+                        step4 = True
+                        match = sample(match, 1)[0]
+                        # Step 5: Label the selected point with the product
+                        # of the sign of the previously point to which it is
+                        # adjacent in T and the sign of the line joining them
+                        marks[unsign] = marks[match] * tree[match][unsign]['weight']
+                        try:
+                            lines[(unsign, match)] = True
+                        except KeyError:
+                            lines[(match, unsign)] = True
+        # Step 8: Select an untested line of S - E(T)
+        # it is possible that all lines have been tested;
+        # in this case, the graph is balanced for sure
+        if not all(lines.values()):
+            untested = sample([i for i in lines if not lines[i]], 1)[0]
+            # Step 9: Is the sign of the selected line equal to the product
+            # of the signs of its two points?
+            untested_sign = marks[untested[0]] * marks[untested[1]]
+            if untested_sign == graph.edges[untested]['weight']:
+                lines[untested] = True
+            else:
+                # Step 10: Stop, S is not balanced
+                balance = False
+                break
+    return balance
+
 
