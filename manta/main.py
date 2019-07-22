@@ -288,17 +288,17 @@ def main():
             network.edges[edge]['weight'] = orig_edges[edge]
     if args['layout']:
         layout = generate_layout(graph, args['tax'])
-    if args['f'] == 'graphml':
-        nx.write_graphml(graph, args['fp'] + '.graphml')
-    elif args['f'] == 'edgelist':
-        nx.write_weighted_edgelist(graph, args['fp'] + '.txt')
-    elif args['f'] == 'gml':
-        nx.write_gml(graph, args['fp'] + '.gml')
-    elif args['f'] == 'adj':
-        nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
-    elif args['f'] == 'cyjs':
-        write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
     if args['fp']:
+        if args['f'] == 'graphml':
+            nx.write_graphml(graph, args['fp'] + '.graphml')
+        elif args['f'] == 'edgelist':
+            nx.write_weighted_edgelist(graph, args['fp'] + '.txt')
+        elif args['f'] == 'gml':
+            nx.write_gml(graph, args['fp'] + '.gml')
+        elif args['f'] == 'adj':
+            nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
+        elif args['f'] == 'cyjs':
+            write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
         logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
     exit(0)
 
