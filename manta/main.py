@@ -235,7 +235,7 @@ def main():
     if args['version']:
         info = VersionInfo('manta')
         logger.info(info.version_string())
-    if args['graph'] != 'demo':
+    if args['graph'] != 'demo' and args['graph']:
         filename = args['graph'].split(sep=".")
         extension = filename[len(filename)-1]
         try:
@@ -298,7 +298,8 @@ def main():
         nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
     elif args['f'] == 'cyjs':
         write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
-    logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
+    if args['fp']:
+        logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
     exit(0)
 
 
