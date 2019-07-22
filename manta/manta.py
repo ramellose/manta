@@ -72,6 +72,7 @@ from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 import numpy as np
 import logging.handlers
+from pbr.version import VersionInfo
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -219,12 +220,21 @@ def set_manta():
                         action='store_true',
                         help='Provides additional details on progress. ',
                         default=False)
+    parser.add_argument('-version', '--version',
+                        dest='version',
+                        required=False,
+                        help='Version number.',
+                        action='store_true',
+                        default=False)
     return parser
 
 
 def main():
     args = set_manta().parse_args(sys.argv[1:])
     args = vars(args)
+    if args['version']:
+        info = VersionInfo('manta')
+        logger.info(info.version_string())
     if args['graph'] != 'demo':
         filename = args['graph'].split(sep=".")
         extension = filename[len(filename)-1]

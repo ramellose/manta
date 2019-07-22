@@ -1,13 +1,13 @@
 # _manta_ ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
 
-Microbial association network clustering algorithm. Version 0.3.0.
+Microbial association network clustering algorithm.
 
 [![Build Status](https://travis-ci.com/ramellose/manta.svg?token=9mhqeTh13MErxyrk5zR8&branch=master)](https://travis-ci.com/ramellose/manta)
 
 This toolbox is aimed at weighted & undirected microbial networks. It uses a diffusion-based proccess to carry out network clustering.
 Moreover, it can generate a Cytoscape-compatible layout that places taxonomically similar & structurally similar nodes closer together.
 Contact the author at lisa.rottjers (at) kuleuven.be. Your feedback is much appreciated!
-This version is still in early alpha and has been tested for Python 3.6.
+This version is still in early beta and has been tested for Python 3.6.
 
 ## Getting Started
 
