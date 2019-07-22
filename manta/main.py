@@ -235,7 +235,8 @@ def main():
             elif extension == 'cyjs':
                 network = read_cyjson(args['graph'])
             else:
-                logger.warning('Format not accepted.')
+                logger.warning('Format not accepted. '
+                               'Please specify the filename including extension (e.g. test.graphml).')
                 exit()
         except Exception:
             logger.error('Could not import network file!', exc_info=True)
