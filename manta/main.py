@@ -7,53 +7,39 @@ and uses this to generate network clusters.
 Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
 Detailed explanations are available in the headers of each file.
 
-The arguments for *manta* can be separated into 4 groups:
-
-* Arguments for importing and exporting data.
-*  Arguments for network clustering.
-* Arguments for network clustering on flip-flopping networks.
-* Arguments for network centralities.
-
-The arguments for importing and exporting data include:
-
-* -i Filepath to input network.
-* -o Filepath to output network
-* -f Filetype for output network
-* -tax Filepath to taxonomy table.
-* --layout If flagged, a layout is generated
-* -dir If a directed network is imported, setting this to True converts the network to undirected.
-* -b If flagged, all edge weights are converted to 1 and -1.
 manta uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
 These tables can be used to generate a layout for cyjson files.
 Other file formats do not export layout coordinates.
 
-The arguments for network clustering include:
-
-* -min Minimum cluster number
-* -max Maximum cluster number
-* -mc Minimum cluster size
-* -limit Error limit until convergence is considered reached
-* -iter Number of iterations to keep going if convergence is not reached
-
-manta uses agglomerative clustering on a scoring matrix to assign cluster identities.
+manta generates a scoring matrix and uses agglomerative clustering to assign cluster identities.
 The scoring matrix is generated through a procedure involving network flow.
 Nodes that cluster separately are removed and combined with identified clusters later on.
-Hence, manta will not identify clusters of only 1 node.
-It is highly likely that networks will not converge neatly.
+It is highly likely that networks will not converge neatly, as most real-world networks are unbalanced.
 In that case, manta will apply the network flow procedure on a subset of the network.
-
-The arguments for network clustering on flip-flopping networks include:
-
-* -perm Number of permutations on network subsets
-* -ratio Ratio of edges that need to be positive or negative to consider the edges stable through permutations.
-* -scale Threshold for shortest path products to oscillators.
 
 The network flow procedure relies on the following assumption:
 positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
 The same is assumed for negative positions.
 The ratio defines which positions are considered mostly positive or mostly negative.
 
-For demo purposes, we included a network generated from data
+Default numeric parameters:
+-min    Minimum number of clusters. Default: 2.
+-ms     Minimum cluster size as fraction of network size. Default: 0.2.
+-max    Maximum number of clusters. Default: 4.
+-limit  The limit defines the minimum percentage decrease in error per iteration.
+        If iterations do not decrease the error anymore, the matrix is considered converged. Default: 2.
+-perm   Number of permutation iterations for network subsetting during partial iterations. Default: number of nodes.
+-subset     Fraction of edges that are used for subsetting if the input graph is not balanced. Default: 0.8.
+-ratio  Fraction of scores that need to be positive or negative for edge scores to be considered stable. Default: 0.8.
+-scale  Edge scale used to separate out weak cluster assignments.
+        The larger the edge scale, the larger the weak cluster. Default: 0.8.
+-rel    Number of permutation iterations for reliability estimates.
+        By default, this number is estimated from the number of dyadic pairs.
+-e      Fraction of edges to rewire for reliability tests. Default: 0.1.
+
+For demo purposes, we included a network generated from oral samples of bats.
+This data was downloaded from QIITA: https://qiita.ucsd.edu/study/description/11815
+Lutz, H. L. et al. (2018). Associations between Afrotropical bats, parasites, and microbial symbionts. bioRxiv, 340109.
 """
 
 __author__ = 'Lisa Rottjers'
