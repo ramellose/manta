@@ -235,7 +235,7 @@ def main():
     if args['version']:
         info = VersionInfo('manta')
         logger.info(info.version_string())
-    if args['graph'] != 'demo' and args['graph']:
+    if args['graph'] != 'demo':
         filename = args['graph'].split(sep=".")
         extension = filename[len(filename)-1]
         try:
@@ -254,7 +254,7 @@ def main():
             logger.error('Could not import network file!', exc_info=True)
             exit()
         # first need to convert network to undirected
-    else:
+    elif args['graph'] == 'demo':
         path = os.path.dirname(manta.__file__)
         path = path + '\\demo.graphml'
         network = nx.read_graphml(path)
