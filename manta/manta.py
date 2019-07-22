@@ -114,11 +114,11 @@ def set_manta():
                              'at the moment, .graphml, .txt (weighted edgelist), .gml and .cyjs are accepted. \n'
                              'If you set -i to "demo", a demo dataset will be loaded.',
                         default=None,
-                        required=True)
+                        required=False)
     parser.add_argument('-o', '--output_graph',
                         dest='fp',
                         help='Output network file. Specify full file path without extension.',
-                        default=None, required=True)
+                        default=None, required=False)
     parser.add_argument('-f', '--file_type',
                         dest='f',
                         help='Format of output network file. Default: cyjs.',
