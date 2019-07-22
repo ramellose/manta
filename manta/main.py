@@ -243,7 +243,7 @@ def main():
         # first need to convert network to undirected
     elif args['graph'] == 'demo':
         path = os.path.dirname(manta.__file__)
-        path = path + '\\demo.graphml'
+        path = path + '//demo.graphml'
         network = nx.read_graphml(path)
     if args['direction']:
         if extension == 'txt':
