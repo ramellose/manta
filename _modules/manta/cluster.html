@@ -1,0 +1,700 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>manta.cluster &#8212; manta 0.4.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for manta.cluster</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">The clustering algorithm works in several steps to generate cluster assignments.</span>
+
+<span class="sd">1. Generate a scoring matrix using a network flow strategy</span>
+<span class="sd">2. Cluster on the scoring matrix.</span>
+<span class="sd">3. In case the network displays memory effects, define weak nodes.</span>
+
+<span class="sd">The scoring matrix is first clustered with the AgglomerativeClustering algorithm.</span>
+<span class="sd">Because the network flow strategy can result in central values being separated from the clusters,</span>
+<span class="sd">agglomerative clustering is repeated on score matrices with removed high-scoring nodes</span>
+<span class="sd">until larger clusters are identified.</span>
+<span class="sd">After this step, clustering assignments are  set.</span>
+<span class="sd">However, if the network caused the scoring matrix to enter a flip-flop state,</span>
+<span class="sd">nodes can still be defined as &#39;weak&#39;.</span>
+<span class="sd">In this case, manta uses a shortest path strategy to assess whether nodes belong to a cluster</span>
+<span class="sd">or are in conflict with the cluster oscillator.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s1">&#39;Lisa Rottjers&#39;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s1">&#39;lisa.rottjers@kuleuven.be&#39;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s1">&#39;Development&#39;</span>
+<span class="n">__license__</span> <span class="o">=</span> <span class="s1">&#39;Apache 2.0&#39;</span>
+
+
+<span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="c1"># from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn</span>
+<span class="kn">from</span> <span class="nn">sklearn.cluster</span> <span class="k">import</span> <span class="n">AgglomerativeClustering</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">manta.flow</span> <span class="k">import</span> <span class="n">diffusion</span><span class="p">,</span> <span class="n">partial_diffusion</span><span class="p">,</span> <span class="n">harary_components</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="k">import</span> <span class="n">combinations</span><span class="p">,</span> <span class="n">chain</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">logging.handlers</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+<span class="c1"># handler to sys.stdout</span>
+<span class="n">sh</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">StreamHandler</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+<span class="n">sh</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+<span class="n">formatter</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">sh</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">sh</span><span class="p">)</span>
+
+<span class="c1"># handler to file</span>
+<span class="c1"># only handler with &#39;w&#39; mode, rest is &#39;a&#39;</span>
+<span class="c1"># once this handler is started, the file writing is cleared</span>
+<span class="c1"># other handlers append to the file</span>
+<span class="n">logpath</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\\</span><span class="s1">manta.log&#39;</span>
+<span class="c1"># filelog path is one folder above manta</span>
+<span class="c1"># pyinstaller creates a temporary folder, so log would be deleted</span>
+<span class="n">fh</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">handlers</span><span class="o">.</span><span class="n">RotatingFileHandler</span><span class="p">(</span><span class="n">maxBytes</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+                                          <span class="n">filename</span><span class="o">=</span><span class="n">logpath</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;a&#39;</span><span class="p">)</span>
+<span class="n">fh</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+<span class="n">formatter</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">fh</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="cluster_graph"><a class="viewcode-back" href="../../manta.html#manta.cluster.cluster_graph">[docs]</a><span class="k">def</span> <span class="nf">cluster_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">max_clusters</span><span class="p">,</span> <span class="n">min_clusters</span><span class="p">,</span> <span class="n">min_cluster_size</span><span class="p">,</span>
+                  <span class="n">iterations</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">ratio</span><span class="p">,</span> <span class="n">edgescale</span><span class="p">,</span> <span class="n">permutations</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Takes a networkx graph and carries out network clustering.</span>
+<span class="sd">    The returned graph contains cluster assignments and weak assignments.</span>
+<span class="sd">    If weight is available, this is considered during the diffusion process.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: Weighted, undirected networkx graph.</span>
+<span class="sd">    :param limit: Percentage in error decrease until matrix is considered converged.</span>
+<span class="sd">    :param max_clusters: Maximum number of clusters to evaluate in K-means clustering.</span>
+<span class="sd">    :param min_clusters: Minimum number of clusters to evaluate in K-means clustering.</span>
+<span class="sd">    :param min_cluster_size: Minimum cluster size as fraction of network size</span>
+<span class="sd">    :param iterations: If algorithm does not converge, it stops here.</span>
+<span class="sd">    :param subset: Fraction of edges used in subsetting procedure</span>
+<span class="sd">    :param ratio: Ratio of scores that need to be positive or negative for a stable edge</span>
+<span class="sd">    :param edgescale: Mean edge weight for node removal</span>
+<span class="sd">    :param permutations: Number of permutations for partial iterations</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: NetworkX graph, score matrix and diffusion matrix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">adj_index</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">)):</span>
+        <span class="n">adj_index</span><span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">)[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">i</span>
+    <span class="n">rev_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">v</span><span class="p">:</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">adj_index</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="c1"># next part is to define scoring matrix</span>
+    <span class="n">balanced</span> <span class="o">=</span> <span class="p">[</span><span class="kc">False</span><span class="p">]</span>
+    <span class="n">scoremat</span><span class="p">,</span> <span class="n">memory</span><span class="p">,</span> <span class="n">diffs</span> <span class="o">=</span> <span class="n">diffusion</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="n">iterations</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">nx</span><span class="o">.</span><span class="n">is_directed</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
+        <span class="n">balanced</span> <span class="o">=</span> <span class="n">harary_components</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="c1"># partial diffusion results in unclosed graphs for directed graphs,</span>
+        <span class="c1"># and can therefore not be used here.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">balanced</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Carrying out diffusion on partial graphs. &quot;</span><span class="p">)</span>
+            <span class="c1"># ratio from 0.7 to 0.9 appears to give good results on 3 clusters</span>
+            <span class="n">scoremat</span><span class="p">,</span> <span class="n">partials</span> <span class="o">=</span> <span class="n">partial_diffusion</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="n">iterations</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">subset</span><span class="p">,</span>
+                                                   <span class="n">ratio</span><span class="o">=</span><span class="n">ratio</span><span class="p">,</span> <span class="n">permutations</span><span class="o">=</span><span class="n">permutations</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+    <span class="n">bestcluster</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="c1"># the randomclust is a random separation into two clusters</span>
+    <span class="c1"># if clustering can&#39;t beat this, the user is given a warning</span>
+    <span class="c1"># select optimal cluster by sparsity score</span>
+    <span class="n">bestcluster</span> <span class="o">=</span> <span class="n">cluster_hard</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">adj_index</span><span class="o">=</span><span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="o">=</span><span class="n">rev_index</span><span class="p">,</span> <span class="n">scoremat</span><span class="o">=</span><span class="n">scoremat</span><span class="p">,</span>
+                               <span class="n">max_clusters</span><span class="o">=</span><span class="n">max_clusters</span><span class="p">,</span>
+                               <span class="n">min_clusters</span><span class="o">=</span><span class="n">min_clusters</span><span class="p">,</span> <span class="n">min_cluster_size</span><span class="o">=</span><span class="n">min_cluster_size</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+    <span class="n">flatcluster</span> <span class="o">=</span> <span class="n">_cluster_vector</span><span class="p">(</span><span class="n">bestcluster</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">balanced</span><span class="p">):</span>
+        <span class="n">weak_nodes</span> <span class="o">=</span> <span class="n">cluster_weak</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">diffs</span><span class="o">=</span><span class="n">diffs</span><span class="p">,</span> <span class="n">cluster</span><span class="o">=</span><span class="n">flatcluster</span><span class="p">,</span>
+                                  <span class="n">edgescale</span><span class="o">=</span><span class="n">edgescale</span><span class="p">,</span>
+                                  <span class="n">adj_index</span><span class="o">=</span><span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="o">=</span><span class="n">rev_index</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+        <span class="n">weak_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">adj_index</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="ow">in</span> <span class="n">weak_nodes</span><span class="p">:</span>
+                <span class="n">weak_dict</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;weak&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">weak_dict</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;strong&#39;</span>
+            <span class="n">nx</span><span class="o">.</span><span class="n">set_node_attributes</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">weak_dict</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;assignment&#39;</span><span class="p">)</span>
+    <span class="n">nx</span><span class="o">.</span><span class="n">set_node_attributes</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">bestcluster</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;cluster&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">graph</span><span class="p">,</span> <span class="n">scoremat</span></div>
+
+
+<div class="viewcode-block" id="sparsity_score"><a class="viewcode-back" href="../../manta.html#manta.cluster.sparsity_score">[docs]</a><span class="k">def</span> <span class="nf">sparsity_score</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a graph, and a list of cluster identities,</span>
+<span class="sd">    this function calculates how many edges need to be cut</span>
+<span class="sd">    to assign these cluster identities.</span>
+<span class="sd">    Cuts through positively-weighted edges are penalized,</span>
+<span class="sd">    whereas cuts through negatively-weighted edges are rewarded.</span>
+<span class="sd">    The lowest sparsity score represents the best clustering.</span>
+<span class="sd">    Because this sparsity score rewards cluster assignments</span>
+<span class="sd">    that separate out negative hubs.</span>
+<span class="sd">    This penalty ensures that nodes with some intra-cluster</span>
+<span class="sd">    negative edges are still assigned to clusters where</span>
+<span class="sd">    they predominantly co-occur with other cluster members.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX weighted, undirected graph</span>
+<span class="sd">    :param clusters: List of cluster identities</span>
+<span class="sd">    :param rev_index: Index matching node ID to matrix index</span>
+<span class="sd">    :return: Sparsity score</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># set up scale for positive + negative edges</span>
+    <span class="c1"># the sparsity score scales from -1 to 1</span>
+    <span class="c1"># -1 is the worst possible assignment,</span>
+    <span class="c1"># all negative edges inside clusters and positive outside clusters</span>
+    <span class="c1"># 1 is the best,</span>
+    <span class="c1"># with clusters containing only positive edges</span>
+    <span class="n">cut_score</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+    <span class="n">sparsity</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">cluster_id</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">clusters</span><span class="p">):</span>
+        <span class="c1"># get the set of edges that is NOT in either cluster</span>
+        <span class="n">node_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">clusters</span> <span class="o">==</span> <span class="n">cluster_id</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">node_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">rev_index</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">node_ids</span><span class="p">]</span>
+        <span class="n">cluster</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="n">node_ids</span><span class="p">)</span>
+        <span class="n">edges</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">cluster</span><span class="o">.</span><span class="n">edges</span><span class="p">))</span>
+        <span class="c1"># penalize for having negative edges inside cluster</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">get_edge_attributes</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">weights</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">sparsity</span> <span class="o">-=</span> <span class="n">cut_score</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">sparsity</span> <span class="o">+=</span> <span class="n">cut_score</span>
+    <span class="n">all_edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+    <span class="n">cuts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">all_edges</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">edge</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">edges</span> <span class="ow">and</span> <span class="p">(</span><span class="n">edge</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">edge</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+            <span class="c1"># problem with cluster edges having swapped orders</span>
+            <span class="n">cuts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">edge</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">cuts</span><span class="p">:</span>
+        <span class="n">cut</span> <span class="o">=</span> <span class="n">graph</span><span class="p">[</span><span class="n">edge</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="n">edge</span><span class="p">[</span><span class="mi">1</span><span class="p">]][</span><span class="s1">&#39;weight&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">cut</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">sparsity</span> <span class="o">-=</span> <span class="n">cut_score</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sparsity</span> <span class="o">+=</span> <span class="n">cut_score</span>
+    <span class="k">return</span> <span class="n">sparsity</span></div>
+
+
+<div class="viewcode-block" id="cluster_hard"><a class="viewcode-back" href="../../manta.html#manta.cluster.cluster_hard">[docs]</a><span class="k">def</span> <span class="nf">cluster_hard</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">,</span> <span class="n">scoremat</span><span class="p">,</span>
+                 <span class="n">max_clusters</span><span class="p">,</span> <span class="n">min_clusters</span><span class="p">,</span> <span class="n">min_cluster_size</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Agglomerative clustering is used to separate nodes based on the scoring matrix.</span>
+<span class="sd">    Because the scoring matrix generally results in separation of &#39;central&#39; nodes,</span>
+<span class="sd">    these nodes are removed and clustering is repeated until larger clusters are identified.</span>
+<span class="sd">    Afterwards, the nodes are assigned to clusters based on a shortest path strategy.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX weighted, undirected graph</span>
+<span class="sd">    :param adj_index: Index matching matrix index to node ID</span>
+<span class="sd">    :param rev_index: Index matching node ID to matrix index</span>
+<span class="sd">    :param scoremat: Converged diffusion matrix</span>
+<span class="sd">    :param max_clusters: Maximum cluster number</span>
+<span class="sd">    :param min_clusters: Minimum cluster number</span>
+<span class="sd">    :param min_cluster_size: Minimum cluster size as fraction of network size</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: Dictionary of nodes with cluster assignments</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># get the mean of 100 assignments</span>
+    <span class="n">randomscores</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">randomclust</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">scoremat</span><span class="p">))</span>
+        <span class="n">randomscores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sparsity_score</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">randomclust</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">))</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">scores</span><span class="p">[</span><span class="s1">&#39;random&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">randomscores</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Sparsity level for 2 clusters, randomly assigned labels: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="s1">&#39;random&#39;</span><span class="p">]))</span>
+    <span class="n">bestclusters</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">clusnum</span> <span class="o">=</span> <span class="n">min_clusters</span>
+    <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">rev_index</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">outliers</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">outliers</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="n">clustermat</span> <span class="o">=</span> <span class="n">scoremat</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="c1"># minimum cluster size is 10% of nodes</span>
+    <span class="n">minclus</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span> <span class="o">*</span> <span class="n">min_cluster_size</span>
+    <span class="k">while</span> <span class="n">clusnum</span> <span class="o">&lt;</span> <span class="n">max_clusters</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">clusters</span> <span class="o">=</span> <span class="n">AgglomerativeClustering</span><span class="p">(</span><span class="n">n_clusters</span><span class="o">=</span><span class="n">clusnum</span><span class="p">)</span><span class="o">.</span><span class="n">fit_predict</span><span class="p">(</span><span class="n">clustermat</span><span class="p">)</span>
+        <span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">clusters</span><span class="p">)</span>
+        <span class="c1"># then add to cluster based on shortest paths</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">counts</span> <span class="o">&lt;</span> <span class="n">minclus</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># if there is a cluster with fewer than 3 nodes,</span>
+            <span class="c1"># remove nodes that separate into tiny cluster</span>
+            <span class="c1"># get cluster ID and location for this cluster</span>
+            <span class="n">locs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">counts</span> <span class="o">&lt;</span> <span class="n">minclus</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># we only remove one cluster pos at a time</span>
+            <span class="c1"># repeated clustering may assign node differently</span>
+            <span class="n">loc</span> <span class="o">=</span> <span class="n">locs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">clusid</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">clusters</span><span class="p">))[</span><span class="n">loc</span><span class="p">]</span>
+            <span class="n">clusloc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">clusters</span> <span class="o">==</span> <span class="n">clusid</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># we need to update the rev_index so that adjacency indices point to taxon IDs</span>
+            <span class="c1"># outlier nodes are added to a list, to be dealt with later</span>
+            <span class="n">outliers</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scoremat_index</span><span class="p">[</span><span class="n">clusloc</span><span class="p">])</span>
+            <span class="n">clustermat</span><span class="p">,</span> <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">_remove_node</span><span class="p">(</span><span class="n">clusloc</span><span class="p">,</span> <span class="n">clustermat</span><span class="p">,</span> <span class="n">scoremat_index</span><span class="p">)</span>
+            <span class="c1"># now the smaller clusters are deleted, we can cluster on the updated scoring matrix</span>
+            <span class="k">if</span> <span class="n">clustermat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_clusters</span><span class="p">:</span>
+                <span class="c1"># indicates that there is no good clustering possible for this cluster number</span>
+                <span class="n">clusnum</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">outliers</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+                <span class="c1"># reset scoring matrix in case different cluster assignment does assign outliers</span>
+                <span class="n">clustermat</span> <span class="o">=</span> <span class="n">scoremat</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">rev_index</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">scores</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span> <span class="o">=</span> <span class="n">sparsity_score</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">)</span>
+            <span class="n">bestclusters</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span> <span class="o">=</span> <span class="n">clusters</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Sparsity level of k=&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">clusnum</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; clusters: &#39;</span>
+                            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">clusnum</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span><span class="p">)</span>
+            <span class="n">clusnum</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">outliers</span><span class="p">[</span><span class="n">clusnum</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+            <span class="c1"># reset scoring matrix in case different cluster assignment does assign outliers</span>
+            <span class="n">clustermat</span> <span class="o">=</span> <span class="n">scoremat</span>
+            <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">rev_index</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">topscore</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">scores</span><span class="o">.</span><span class="n">get</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">topscore</span> <span class="o">!=</span> <span class="s1">&#39;random&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Highest score for k=&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">topscore</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; clusters: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">topscore</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Warning: random clustering performed best.&#39;</span>
+                       <span class="s1">&#39; </span><span class="se">\n</span><span class="s1"> Setting cluster amount to minimum value.&#39;</span><span class="p">)</span>
+        <span class="n">topscore</span> <span class="o">=</span> <span class="n">min_clusters</span>
+        <span class="c1"># it is possible that all evaluated cluster assignments did not work out</span>
+        <span class="c1"># in that case, the assignment below is without the binning strategy</span>
+        <span class="k">if</span> <span class="n">min_clusters</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bestclusters</span><span class="p">:</span>
+            <span class="n">bestclusters</span><span class="p">[</span><span class="n">min_clusters</span><span class="p">]</span> <span class="o">=</span> <span class="n">AgglomerativeClustering</span><span class="p">(</span><span class="n">n_clusters</span><span class="o">=</span><span class="n">min_clusters</span><span class="p">)</span><span class="o">.</span><span class="n">fit_predict</span><span class="p">(</span><span class="n">clustermat</span><span class="p">)</span>
+    <span class="c1"># given a topscore, clustering is carried out on scoremat without outliers</span>
+    <span class="n">outlier_locs</span> <span class="o">=</span> <span class="p">[</span><span class="n">adj_index</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">outliers</span><span class="p">[</span><span class="n">topscore</span><span class="p">]]</span>
+    <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">rev_index</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">clustermat</span> <span class="o">=</span> <span class="n">scoremat</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">clustermat</span><span class="p">,</span> <span class="n">scoremat_index</span> <span class="o">=</span> <span class="n">_remove_node</span><span class="p">(</span><span class="n">outlier_locs</span><span class="p">,</span> <span class="n">clustermat</span><span class="p">,</span> <span class="n">scoremat_index</span><span class="p">)</span>
+    <span class="n">bestcluster</span> <span class="o">=</span> <span class="n">bestclusters</span><span class="p">[</span><span class="n">topscore</span><span class="p">]</span>
+    <span class="c1"># we need to assign outlier nodes to clusters after clustering on main network</span>
+    <span class="n">corrdict</span> <span class="o">=</span> <span class="n">_path_weights</span><span class="p">(</span><span class="n">outliers</span><span class="p">[</span><span class="n">topscore</span><span class="p">],</span> <span class="n">graph</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span>
+    <span class="n">scoremat_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">v</span><span class="p">:</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">scoremat_index</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="c1"># generate dictionary of cluster assignments</span>
+    <span class="c1"># use this to reconstruct bestcluster vector</span>
+    <span class="n">cluster_index</span> <span class="o">=</span> <span class="n">adj_index</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">cluster_index</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cluster_index</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">bestcluster</span><span class="p">[</span><span class="n">scoremat_index</span><span class="p">[</span><span class="n">key</span><span class="p">]])</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="c1"># key error happens for outlier that has not been assigned cluster ID yet</span>
+            <span class="k">pass</span>
+    <span class="c1"># replace node values in corrdict with cluster ids</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">corrdict</span><span class="p">:</span>
+        <span class="c1"># initialize list to store path values per cluster</span>
+        <span class="n">clusdict</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">bestcluster</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">clusdict</span><span class="p">:</span>
+            <span class="n">clusdict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="c1"># lookup cluster ID of node</span>
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">corrdict</span><span class="p">[</span><span class="n">node</span><span class="p">]:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">clusid</span> <span class="o">=</span> <span class="n">cluster_index</span><span class="p">[</span><span class="n">value</span><span class="p">]</span>
+                <span class="n">clusdict</span><span class="p">[</span><span class="n">clusid</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">corrdict</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="n">value</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="n">closest_cluster</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">bestcluster</span><span class="p">))[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">clusdict</span><span class="p">[</span><span class="n">x</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">clusdict</span><span class="p">])]</span>
+        <span class="n">cluster_index</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">closest_cluster</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cluster_index</span></div>
+
+
+<div class="viewcode-block" id="cluster_weak"><a class="viewcode-back" href="../../manta.html#manta.cluster.cluster_weak">[docs]</a><span class="k">def</span> <span class="nf">cluster_weak</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">diffs</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">edgescale</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Although clusters can be assigned with cluster_hard, cluster_weak tests</span>
+<span class="sd">    whether cluster assignments are in conflict with oscillator nodes present in clusters.</span>
+
+<span class="sd">    Oscillators can only be defined from flip-flopping states;</span>
+<span class="sd">    hence, this function should not be called for scoring matrices that converge to -1 and 1.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX weighted, undirected graph</span>
+<span class="sd">    :param diffs: Diffusion matrices from flip-flop states generated by diffusion</span>
+<span class="sd">    :param cluster: Cluster assignment</span>
+<span class="sd">    :param edgescale: Mean edge weight for node removal</span>
+<span class="sd">    :param adj_index: Node index</span>
+<span class="sd">    :param rev_index: Reverse node index</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: Vector with cluster assignments</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># clustering on the 1st iteration already yields reasonable results</span>
+    <span class="c1"># however, we can&#39;t separate nodes that are &#39;intermediates&#39; between clusters</span>
+    <span class="c1"># solution: find nodes with the lowest cumulative edge amplitudes</span>
+    <span class="c1"># the nodes that oscillate the most, have the largest self-loop amplitude</span>
+    <span class="c1"># these are on the cluster periphery</span>
+    <span class="c1"># nodes that are in-between clusters do not have large self-loop amplitudes</span>
+    <span class="c1">#bestcluster = cluster_hard(graph=graph, rev_index=rev_index, scoremat=scoremat,</span>
+    <span class="c1">#                           max_clusters=max_clusters, min_clusters=min_clusters, cluster=cluster)</span>
+    <span class="c1"># cluster assignment 0 is reserved for weak clusters</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Determining weak nodes.&#39;</span><span class="p">)</span>
+    <span class="c1"># diffs is a 3-dimensional array; need to extract 2D dataframe with timeseries for each edge</span>
+    <span class="c1"># each timeseries is 5 flip-flops long</span>
+    <span class="n">diffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">diffs</span><span class="p">)</span>
+    <span class="c1"># only upper triangle of matrix is indexed this way</span>
+    <span class="n">core</span><span class="p">,</span> <span class="n">anti</span> <span class="o">=</span> <span class="n">_core_oscillators</span><span class="p">(</span><span class="n">difmats</span><span class="o">=</span><span class="n">diffs</span><span class="p">,</span> <span class="n">assignment</span><span class="o">=</span><span class="n">cluster</span><span class="p">,</span>
+                                   <span class="n">adj_index</span><span class="o">=</span><span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="o">=</span><span class="n">rev_index</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+    <span class="c1"># for each node with contrasting edge products,</span>
+    <span class="c1"># we can check whether the sparsity score is improved by</span>
+    <span class="c1"># removing the node or adding it to another cluster.</span>
+    <span class="n">remove_cluster</span> <span class="o">=</span> <span class="n">_oscillator_paths</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">core_oscillators</span><span class="o">=</span><span class="n">core</span><span class="p">,</span> <span class="n">assignment</span><span class="o">=</span><span class="n">cluster</span><span class="p">,</span>
+                                       <span class="n">adj_index</span><span class="o">=</span><span class="n">adj_index</span><span class="p">,</span> <span class="n">edgescale</span><span class="o">=</span><span class="n">edgescale</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="c1"># we only remove nodes with conflicting shortest paths if</span>
+    <span class="c1"># they have a large impact on sparsity score</span>
+    <span class="c1">#posfreq = np.zeros((len(graph), len(graph)))</span>
+    <span class="c1">#negfreq = np.zeros((len(graph), len(graph)))</span>
+    <span class="c1"># count how many times specific values in matrix have</span>
+    <span class="c1"># been assigned positive or negative values</span>
+    <span class="c1">#for b in range(len(partials)):</span>
+    <span class="c1">#    posfreq[partials[b] &gt; 0] += 1</span>
+    <span class="c1">#    negfreq[partials[b] &lt; 0] += 1</span>
+    <span class="c1"># count relative frequeny - values close to 1 or 0 are ok</span>
+    <span class="c1">#posratio = posfreq[np.where(posfreq != 0)] / \</span>
+    <span class="c1">#           (posfreq[np.where(posfreq != 0)] + negfreq[np.where(posfreq != 0)])</span>
+    <span class="c1">#weak_edges = np.where(np.logical_and(posratio &lt; 0.8, posratio &gt; 0.2))</span>
+    <span class="c1">#weak_ids = np.where(posfreq != 0)</span>
+    <span class="c1">#indices = weak_ids[0][weak_edges[0]]</span>
+    <span class="c1">#weak_freq = np.unique(indices, return_counts=True)</span>
+    <span class="c1"># determine how to go from weak edges to weak nodes</span>
+    <span class="c1"># [0] or [1] does not matter, weak_edges is symmetrical</span>
+    <span class="c1">#weak_nodes = list()</span>
+    <span class="c1">#for i in range(len(weak_freq[0])):</span>
+    <span class="c1">#   node = weak_freq[0][i]</span>
+    <span class="c1">#    freq = weak_freq[1][i]</span>
+    <span class="c1">#    deg = nx.degree(graph, list(graph.nodes)[0])</span>
+    <span class="c1">#    if freq / deg &gt; edgescale:</span>
+    <span class="c1">#        weak_nodes.append(i)</span>
+    <span class="k">return</span> <span class="n">remove_cluster</span></div>
+
+
+<span class="k">def</span> <span class="nf">_core_oscillators</span><span class="p">(</span><span class="n">difmats</span><span class="p">,</span> <span class="n">assignment</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a list of diffusion matrices calculated during a flip-flop state,</span>
+<span class="sd">    this function identifies core oscillators as well as their anti-correlated partners.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param difmats: Diffusion matrices during flip-flop state</span>
+<span class="sd">    :param assignment: Cluster assignment</span>
+<span class="sd">    :param adj_index: Dictionary for indexing</span>
+<span class="sd">    :param rev_index: Dictionary for indexing</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: Tuple with list of oscillators and dictionary of anti-correlated oscillators</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">oscillators</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="n">oscillators_series</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">assignment</span><span class="p">)):</span>
+        <span class="c1"># node amplitude is NOT correlated to position in network</span>
+        <span class="n">seq</span> <span class="o">=</span> <span class="n">difmats</span><span class="p">[:,</span> <span class="n">index</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span>
+        <span class="n">ampli</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ampli</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">:</span>
+            <span class="c1"># if the amplitude is this large,</span>
+            <span class="c1"># the node may be an oscillator</span>
+            <span class="c1"># in that case, mean amplitude may be low</span>
+            <span class="n">oscillators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+            <span class="n">oscillators_series</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span>
+    <span class="n">oscillators</span> <span class="o">=</span> <span class="p">[</span><span class="n">rev_index</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">oscillators</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Found the following strong oscillators: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">oscillators</span><span class="p">))</span>
+    <span class="n">amplis</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="n">clusdict</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">oscillators</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">clusdict</span><span class="p">:</span>
+        <span class="n">clusdict</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">assignment</span><span class="p">[</span><span class="n">adj_index</span><span class="p">[</span><span class="n">x</span><span class="p">]]</span>
+    <span class="c1"># we find anti-correlated oscillator nodes</span>
+    <span class="c1"># there should be at least one node represented for each cluster</span>
+    <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">oscillators</span><span class="p">)),</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">oscillators_series</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">-</span> <span class="n">oscillators_series</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="c1"># need to be careful with this number,</span>
+        <span class="c1"># the core oscillators should converge to 1 and -1</span>
+        <span class="c1"># but may stick a little below that value</span>
+        <span class="n">amplis</span><span class="p">[(</span><span class="n">oscillators</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">oscillators</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">]])]</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">total</span><span class="p">))</span>
+    <span class="c1"># need to find the largest anti-correlation per cluster</span>
+    <span class="n">clus_corrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">assignment</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">clus_nodes</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">assignment</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">corr</span> <span class="ow">in</span> <span class="n">amplis</span><span class="p">:</span>
+        <span class="n">cluster1</span> <span class="o">=</span> <span class="n">clusdict</span><span class="p">[</span><span class="n">corr</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+        <span class="n">cluster2</span> <span class="o">=</span> <span class="n">clusdict</span><span class="p">[</span><span class="n">corr</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="n">amplis</span><span class="p">[</span><span class="n">corr</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">clus_corrs</span><span class="p">[</span><span class="n">cluster1</span><span class="p">]:</span>
+            <span class="n">clus_nodes</span><span class="p">[</span><span class="n">cluster1</span><span class="p">]</span> <span class="o">=</span> <span class="n">corr</span>
+            <span class="n">clus_corrs</span><span class="p">[</span><span class="n">cluster1</span><span class="p">]</span> <span class="o">=</span> <span class="n">amplis</span><span class="p">[</span><span class="n">corr</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">amplis</span><span class="p">[</span><span class="n">corr</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">clus_corrs</span><span class="p">[</span><span class="n">cluster2</span><span class="p">]:</span>
+            <span class="n">clus_nodes</span><span class="p">[</span><span class="n">cluster2</span><span class="p">]</span> <span class="o">=</span> <span class="n">corr</span>
+            <span class="n">clus_corrs</span><span class="p">[</span><span class="n">cluster2</span><span class="p">]</span> <span class="o">=</span> <span class="n">amplis</span><span class="p">[</span><span class="n">corr</span><span class="p">]</span>
+    <span class="n">clus_nodes</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clus_nodes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+    <span class="c1"># it is possible for clusters to not have a strong oscillator</span>
+    <span class="n">core_oscillators</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">clus_nodes</span><span class="o">.</span><span class="n">values</span><span class="p">()))))</span>
+    <span class="n">id_corrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">core_oscillators</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">anti_sizes</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">core_oscillators</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="n">core_oscillators</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="n">amplis</span><span class="p">[</span><span class="n">nodes</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="n">amplis</span><span class="p">[(</span><span class="n">nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="k">if</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="n">anti_sizes</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]]:</span>
+            <span class="n">id_corrs</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">anti_sizes</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">size</span>
+        <span class="k">if</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="n">anti_sizes</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">]]:</span>
+            <span class="n">id_corrs</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">anti_sizes</span><span class="p">[</span><span class="n">nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">size</span>
+    <span class="p">[</span><span class="n">clusdict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">clusdict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="k">if</span> <span class="n">x</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">core_oscillators</span><span class="p">]</span>
+    <span class="n">anti_corrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">core</span> <span class="ow">in</span> <span class="n">core_oscillators</span><span class="p">:</span>
+        <span class="n">anti_corrs</span><span class="p">[</span><span class="n">clusdict</span><span class="p">[</span><span class="n">core</span><span class="p">]]</span> <span class="o">=</span> <span class="n">clusdict</span><span class="p">[</span><span class="n">id_corrs</span><span class="p">[</span><span class="n">core</span><span class="p">]]</span>
+    <span class="c1"># oscillator is defined as strongest anti-correlation</span>
+    <span class="k">return</span> <span class="n">core_oscillators</span><span class="p">,</span> <span class="n">anti_corrs</span>
+
+
+<span class="k">def</span> <span class="nf">_oscillator_paths</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">core_oscillators</span><span class="p">,</span>
+                      <span class="n">assignment</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">,</span> <span class="n">edgescale</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given optimal cluster assignments and a set of core oscillators,</span>
+<span class="sd">    this function computes paths to / from oscillators and identifies nodes</span>
+<span class="sd">    which do not match their cluster + oscillator assignment.</span>
+<span class="sd">    A list of these nodes is then returned.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX weighted, undirected graph</span>
+<span class="sd">    :param core_oscillators: List of core oscillators</span>
+<span class="sd">    :param anti_corrs: Dictionary  of anti-correlated oscillators</span>
+<span class="sd">    :param assignment: Cluster assignment</span>
+<span class="sd">    :param adj_index: Dictionary for indexing</span>
+<span class="sd">    :param edgescale: Threshold for node removal</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: List of node indices that are in conflict with oscillators</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># get all shortest paths to/from oscillators</span>
+    <span class="n">corrdict</span> <span class="o">=</span> <span class="n">_path_weights</span><span class="p">(</span><span class="n">core_oscillators</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span>
+    <span class="n">varweights</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>  <span class="c1"># stores nodes that have low weights of mean shortest paths</span>
+    <span class="n">clus_matches</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>  <span class="c1"># stores nodes that have matching signs for oscillators</span>
+    <span class="n">clus_assign</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>  <span class="c1"># stores nodes that have negative shortest paths to cluster oscillator</span>
+    <span class="c1"># first need to scale weight variables for this</span>
+    <span class="n">clusdict</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">core_oscillators</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">clusdict</span><span class="p">:</span>
+        <span class="n">clusdict</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">assignment</span><span class="p">[</span><span class="n">adj_index</span><span class="p">[</span><span class="n">x</span><span class="p">]]</span>
+    <span class="n">clusdict</span> <span class="o">=</span> <span class="p">{</span><span class="n">v</span><span class="p">:</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clusdict</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+        <span class="n">clus_id</span> <span class="o">=</span> <span class="n">assignment</span><span class="p">[</span><span class="n">adj_index</span><span class="p">[</span><span class="n">target</span><span class="p">]]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">weight</span> <span class="o">=</span> <span class="n">corrdict</span><span class="p">[</span><span class="n">clusdict</span><span class="p">[</span><span class="n">clus_id</span><span class="p">]][</span><span class="n">target</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">weight</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="c1"># this criterion filters out nodes that have negative path weight to their oscillator</span>
+                <span class="n">clus_assign</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="k">if</span> <span class="o">-</span><span class="n">edgescale</span> <span class="o">&lt;</span> <span class="n">weight</span> <span class="o">&lt;</span> <span class="n">edgescale</span><span class="p">:</span>
+                <span class="c1"># this criterion filters out nodes that have low cumulative path weights</span>
+                <span class="n">varweights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">pass</span>
+            <span class="c1"># cannot check oscillator sign for clusters w/o oscillators</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Sign of mean edge products does not match cluster assignment for: </span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">clus_assign</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Mean edge products are small for: </span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">varweights</span><span class="p">))</span>
+    <span class="n">remove_cluster</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">adj_index</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">clus_assign</span> <span class="o">+</span> <span class="n">varweights</span><span class="p">])</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">remove_cluster</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_node_sparsity</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">removals</span><span class="p">,</span> <span class="n">assignment</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">):</span>
+    <span class="n">default_sparsity</span> <span class="o">=</span> <span class="n">sparsity_score</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">assignment</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">)</span>
+    <span class="n">clusters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">assignment</span><span class="p">)</span>
+    <span class="n">updated_removals</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">removals</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">removals</span><span class="p">:</span>
+        <span class="n">clus_id</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="n">clus_id</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assignment</span><span class="p">[</span><span class="n">node</span><span class="p">])</span>
+        <span class="n">other_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">clusters</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">clus_id</span><span class="p">))</span>
+        <span class="n">other_sparsities</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="nb">id</span> <span class="ow">in</span> <span class="n">other_ids</span><span class="p">:</span>
+            <span class="n">updated_assignment</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">assignment</span><span class="p">)</span>
+            <span class="n">updated_assignment</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="nb">id</span>
+            <span class="n">other_sparsities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sparsity_score</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">updated_assignment</span><span class="p">,</span> <span class="n">rev_index</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">other_sparsities</span><span class="p">)</span> <span class="o">&lt;</span> <span class="p">(</span><span class="n">default_sparsity</span> <span class="o">-</span> <span class="mf">0.3</span><span class="p">):</span>
+            <span class="n">updated_removals</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">updated_removals</span>
+
+
+<span class="k">def</span> <span class="nf">_path_weights</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a list of nodes, this function returns a dictionary of all shortest path weights</span>
+<span class="sd">    from the sources to all other nodes in the network.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param source: List of source nodes</span>
+<span class="sd">    :param graph: NetworkX graph object</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: Dictionary of shortest path weights</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">corrdict</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">get_edge_attributes</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">)</span>
+    <span class="n">max_weight</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">weights</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="o">/</span> <span class="n">max_weight</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">weights</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="n">rev_weights</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
+        <span class="n">newkey</span> <span class="o">=</span> <span class="p">(</span><span class="n">key</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">rev_weights</span><span class="p">[</span><span class="n">newkey</span><span class="p">]</span> <span class="o">=</span> <span class="n">weights</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">weights</span><span class="p">,</span> <span class="o">**</span><span class="n">rev_weights</span><span class="p">}</span>
+    <span class="c1"># first scale edge weights</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">source</span><span class="p">:</span>
+        <span class="n">targets</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+        <span class="n">corrdict</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">shortest_paths</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">nx</span><span class="o">.</span><span class="n">all_shortest_paths</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">))</span>
+                <span class="n">total_weight</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">shortest_paths</span><span class="p">:</span>
+                    <span class="n">edge_weight</span> <span class="o">=</span> <span class="mi">1</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                        <span class="n">edge_weight</span> <span class="o">*=</span> <span class="n">weights</span><span class="p">[(</span><span class="n">path</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">path</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])]</span>
+                    <span class="n">total_weight</span> <span class="o">+=</span> <span class="n">edge_weight</span>
+                <span class="n">total_weight</span> <span class="o">=</span> <span class="n">total_weight</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">shortest_paths</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">nx</span><span class="o">.</span><span class="n">exception</span><span class="o">.</span><span class="n">NetworkXNoPath</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not find shortest path for: &quot;</span> <span class="o">+</span> <span class="n">target</span><span class="p">)</span>
+                <span class="n">total_weight</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="n">corrdict</span><span class="p">[</span><span class="n">node</span><span class="p">][</span><span class="n">target</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_weight</span>
+    <span class="k">return</span> <span class="n">corrdict</span>
+
+
+<span class="k">def</span> <span class="nf">_remove_node</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="n">mat</span><span class="p">,</span> <span class="n">mat_index</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given an outlier node to remove,</span>
+<span class="sd">    this function updates the matrix and matrix index.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param loc: Node(s) to remove</span>
+<span class="sd">    :param mat: Scoring matrix</span>
+<span class="sd">    :param mat_index: Matrix index</span>
+<span class="sd">    :return: Tuple of  matrix and matrix_index</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">loc</span><span class="p">)</span> <span class="o">==</span> <span class="nb">list</span><span class="p">:</span>
+        <span class="n">loc</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">loc</span> <span class="o">=</span> <span class="p">[</span><span class="n">loc</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">loc</span><span class="p">)):</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="n">loc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">mat_index</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="c1"># need mat_index remove last key if this is not the clusloc</span>
+        <span class="k">if</span> <span class="n">item</span> <span class="o">!=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">mat_index</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">remainder</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">mat_index</span><span class="p">)):</span>
+                <span class="n">mat_index</span><span class="p">[</span><span class="n">remainder</span><span class="p">]</span> <span class="o">=</span> <span class="n">mat_index</span><span class="p">[</span><span class="n">remainder</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+            <span class="n">mat_index</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">mat_index</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">loc</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">loc</span><span class="p">]</span>
+    <span class="c1"># update scoring matrix with removed nodes</span>
+    <span class="k">return</span> <span class="n">mat</span><span class="p">,</span> <span class="n">mat_index</span>
+
+
+<span class="k">def</span> <span class="nf">_cluster_vector</span><span class="p">(</span><span class="n">assignment</span><span class="p">,</span> <span class="n">adj_index</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a dictionary of cluster assignments,</span>
+<span class="sd">    this helper function returns a vector with cluster IDs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param assignment: Dictionary with nodes as keys, cluster IDs as values</span>
+<span class="sd">    :param adj_index: Dictionary with nodes as keys, matrix index as values</span>
+<span class="sd">    :return: Numpy array with cluster assignments</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">assignment</span><span class="p">)))[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">adj_index</span><span class="p">:</span>
+        <span class="n">result</span><span class="p">[</span><span class="n">adj_index</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span> <span class="o">=</span> <span class="n">assignment</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">result</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">manta</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Lisa Rottjers.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

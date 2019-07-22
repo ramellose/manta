@@ -1,0 +1,62 @@
+manta package
+=============
+
+Submodules
+----------
+
+manta.cluster module
+--------------------
+
+.. automodule:: manta.cluster
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+manta.cyjson module
+-------------------
+
+.. automodule:: manta.cyjson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+manta.flow module
+-----------------
+
+.. automodule:: manta.flow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+manta.layout module
+-------------------
+
+.. automodule:: manta.layout
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+manta.main module
+-----------------
+
+.. automodule:: manta.main
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+manta.reliability module
+------------------------
+
+.. automodule:: manta.reliability
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: manta
+    :members:
+    :undoc-members:
+    :show-inheritance:

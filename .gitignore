@@ -1,9 +1,0 @@
-build/*.*
-build
-docs/_build/
-docs/build/*.*
-dist/*.*
-
-/ChangeLog
-/AUTHORS
-/.pytest_cache

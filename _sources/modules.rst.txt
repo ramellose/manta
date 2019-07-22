@@ -1,0 +1,7 @@
+manta
+=====
+
+.. toctree::
+   :maxdepth: 4
+
+   manta

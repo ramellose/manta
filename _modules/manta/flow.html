@@ -1,0 +1,494 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>manta.flow &#8212; manta 0.4.1 documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for manta.flow</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Cluster assignment by manta makes use of a scoring matrix.</span>
+<span class="sd">Functions in this module can generate such a scoring matrix.</span>
+
+<span class="sd">First, an empty adjacency matrix is instantiated.</span>
+<span class="sd">Then, the following steps are carried out until an error threshold is reached:</span>
+
+<span class="sd">1. Raise the matrix to power 2</span>
+<span class="sd">2. Normalize matrix by absolute maximum value</span>
+<span class="sd">3. Add 1 / value for each value in matrix</span>
+<span class="sd">4. Normalize matrix by absolute maximum value</span>
+<span class="sd">5. Calculate error by subtracting previous matrix from current matrix</span>
+
+<span class="sd">If a network consists of clusters connected by positive edges,</span>
+<span class="sd">it will frequently fail to reach the error threshold.</span>
+<span class="sd">This can happen because of two reasons: firstly, the scoring matrix enters a flip-flop state.</span>
+<span class="sd">Secondly, the matrix converges to zero.</span>
+<span class="sd">Flip-flop states are detected by comparing the error to the error 2 iterations ago.</span>
+<span class="sd">If this error is 99% identical, manta continues clustering with a partial iteration strategy.</span>
+<span class="sd">Zero convergence is detected when the threshold of the 99th percentile</span>
+<span class="sd">is below 0.00000001.</span>
+<span class="sd">In either of these cases, manta proceeds with a partial iteration strategy.</span>
+<span class="sd">This strategy repeats the same steps as the normal network flow strategy,</span>
+<span class="sd">but does so on a subset of the network.</span>
+<span class="sd">The scoring matrix is then recovered from stable edges;</span>
+<span class="sd">stable edges are defined as edges that have only positive or negative values during a minimum fraction of permutations.</span>
+<span class="sd">Those permutations are summed together to give positions in the scoring matrix.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s1">&#39;Lisa Rottjers&#39;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s1">&#39;lisa.rottjers@kuleuven.be&#39;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s1">&#39;Development&#39;</span>
+<span class="n">__license__</span> <span class="o">=</span> <span class="s1">&#39;Apache 2.0&#39;</span>
+
+
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">random</span> <span class="k">import</span> <span class="n">sample</span>
+<span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">logging.handlers</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+<span class="c1"># handler to sys.stdout</span>
+<span class="n">sh</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">StreamHandler</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+<span class="n">sh</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+<span class="n">formatter</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">sh</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">sh</span><span class="p">)</span>
+
+<span class="c1"># handler to file</span>
+<span class="c1"># only handler with &#39;w&#39; mode, rest is &#39;a&#39;</span>
+<span class="c1"># once this handler is started, the file writing is cleared</span>
+<span class="c1"># other handlers append to the file</span>
+<span class="n">logpath</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\\</span><span class="s1">manta.log&#39;</span>
+<span class="c1"># filelog path is one folder above manta</span>
+<span class="c1"># pyinstaller creates a temporary folder, so log would be deleted</span>
+<span class="n">fh</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">handlers</span><span class="o">.</span><span class="n">RotatingFileHandler</span><span class="p">(</span><span class="n">maxBytes</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+                                          <span class="n">filename</span><span class="o">=</span><span class="n">logpath</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;a&#39;</span><span class="p">)</span>
+<span class="n">fh</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+<span class="n">formatter</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">fh</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="diffusion"><a class="viewcode-back" href="../../manta.html#manta.flow.diffusion">[docs]</a><span class="k">def</span> <span class="nf">diffusion</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">iterations</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">verbose</span><span class="p">,</span> <span class="n">norm</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">inflation</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Diffusion process for generation of scoring matrix.</span>
+<span class="sd">    The implementation of this process is similar</span>
+<span class="sd">    to the MCL algorithm. However, the rescaling step</span>
+<span class="sd">    in the MCL algorithm has been adjusted to accomodate</span>
+<span class="sd">    for negative signs.</span>
+<span class="sd">    In the first step, the matrix is scaled;</span>
+<span class="sd">    afterwards, every value in the matrix has 1 divided by the value added.</span>
+<span class="sd">    Subsequently, the matrix is scaled. The</span>
+<span class="sd">    cumulative error, relative to the previous iteration,</span>
+<span class="sd">    is calculated by taking the mean of the difference.</span>
+
+<span class="sd">    If a memory effect is detected, not the outcome matrix but the first iteration is returned.</span>
+<span class="sd">    Additionally, 5 iterations after the flip-flop state has been reached are calculated.</span>
+
+<span class="sd">    Normally, memory effects should not be detected because these only happen</span>
+<span class="sd">    if the graph is unbalanced.</span>
+<span class="sd">    The Harary algorithm is used to check whether graphs are unbalanced.</span>
+<span class="sd">    If they are, this diffusion process should not be run.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX graph of a microbial assocation network</span>
+<span class="sd">    :param iterations: Maximum number of iterations to carry out</span>
+<span class="sd">    :param limit: Percentage in error decrease until matrix is considered converged</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :param norm: Normalize values so they converge to -1 or 1</span>
+<span class="sd">    :param inflation: Carry out network diffusion with/without inflation</span>
+<span class="sd">    :return: score matrix, memory effect</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">scoremat</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">to_numpy_array</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>  <span class="c1"># numpy matrix is deprecated</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">diffs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="n">iters</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">memory</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">error_1</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># error steps 1 and 2 iterations back</span>
+    <span class="n">error_2</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># detects flip-flop effect; normal clusters can also increase in error first</span>
+    <span class="k">while</span> <span class="n">error</span> <span class="o">&gt;</span> <span class="n">limit</span> <span class="ow">and</span> <span class="n">iters</span> <span class="o">&lt;</span> <span class="n">iterations</span><span class="p">:</span>
+        <span class="c1"># if there is no flip-flop state, the error will decrease after convergence</span>
+        <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_power</span><span class="p">(</span><span class="n">scoremat</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="c1"># updated_mat = deepcopy(scoremat)</span>
+        <span class="c1"># for entry in np.nditer(updated_mat, op_flags=[&#39;readwrite&#39;]):</span>
+        <span class="c1"># entry[...] = entry ** 2</span>
+        <span class="c1"># expansion step</span>
+        <span class="c1"># squaring the matrix without normalisation</span>
+        <span class="k">if</span> <span class="n">norm</span><span class="p">:</span>
+            <span class="c1"># the flow matrix describes flow and is output to compute centralities</span>
+            <span class="c1"># in the MCL implementation, the rows are normalized to sum to 1</span>
+            <span class="c1"># this creates a column stochastic matrix</span>
+            <span class="c1"># here, we normalize by dividing with absolute largest value</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># this indicates the matrix is busy converging to 0</span>
+                    <span class="c1"># in that case, we do the same as with the memory effect</span>
+                    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Matrix converging to zero.&#39;</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                                    <span class="s1">&#39;Clustering with partial network. &#39;</span><span class="p">)</span>
+                    <span class="n">convergence</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span>
+            <span class="c1"># updated_mat[updated_mat &gt; 0] = \</span>
+            <span class="c1">#    updated_mat[updated_mat &gt; 0] / \</span>
+            <span class="c1">#    abs(np.max(updated_mat[updated_mat &gt; 0]))</span>
+            <span class="c1"># updated_mat[updated_mat &lt; 0] = \</span>
+            <span class="c1">#    updated_mat[updated_mat &lt; 0] / \</span>
+            <span class="c1">#    abs(np.min(updated_mat[updated_mat &lt; 0]))</span>
+            <span class="c1"># the above code scales negative and positive values separately</span>
+            <span class="c1"># interestingly, the matrix does not separate correctly if used</span>
+        <span class="c1"># this indicates the matrix is busy converging to 0</span>
+        <span class="c1"># in that case, we do the same as with the memory effect</span>
+        <span class="k">if</span> <span class="n">inflation</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">,</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;readwrite&#39;</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># normally, there is an inflation step; values are raised to a power</span>
+                    <span class="c1"># with this normalisation, the inflation step causes</span>
+                    <span class="c1"># the algorithm to converge to 0</span>
+                    <span class="c1"># we need above-0 values to converge to -1, and the rest to 1</span>
+                    <span class="n">value</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">norm</span><span class="p">:</span>
+            <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span> <span class="o">-</span> <span class="n">scoremat</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">updated_mat</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)]</span> <span class="o">/</span> <span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">updated_mat</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)])</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span>
+        <span class="k">if</span> <span class="n">norm</span> <span class="ow">and</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Current error: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">error</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">error_2</span> <span class="o">/</span> <span class="n">error</span> <span class="o">&gt;</span> <span class="mf">0.99</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">error_2</span> <span class="o">/</span> <span class="n">error</span> <span class="o">&lt;</span> <span class="mf">1.01</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">memory</span><span class="p">:</span>
+                    <span class="c1"># if there is a flip-flop state, the error will alternate between two values</span>
+                    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Detected memory effect at iteration: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">iters</span><span class="p">))</span>
+                    <span class="n">memory</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">iterations</span> <span class="o">=</span> <span class="n">iters</span> <span class="o">+</span> <span class="mi">5</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">memory</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Error calculation failed at iteraiton: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">iters</span><span class="p">))</span>
+                <span class="n">memory</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">iterations</span> <span class="o">=</span> <span class="n">iters</span> <span class="o">+</span> <span class="mi">5</span>
+        <span class="k">except</span> <span class="ne">RuntimeWarning</span><span class="p">:</span>
+            <span class="n">memory</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Matrix converged to zero.&#39;</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                            <span class="s1">&#39;Clustering with partial network. &#39;</span><span class="p">)</span>
+        <span class="n">error_2</span> <span class="o">=</span> <span class="n">error_1</span>
+        <span class="n">error_1</span> <span class="o">=</span> <span class="n">error</span>
+        <span class="n">scoremat</span> <span class="o">=</span> <span class="n">updated_mat</span>
+        <span class="k">if</span> <span class="n">iters</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">firstmat</span> <span class="o">=</span> <span class="n">updated_mat</span>
+        <span class="n">iters</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">diffs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scoremat</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">memory</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">scoremat</span><span class="p">)):</span>
+        <span class="n">diffs</span> <span class="o">=</span> <span class="n">diffs</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">:]</span>
+        <span class="n">scoremat</span> <span class="o">=</span> <span class="n">firstmat</span>
+    <span class="k">if</span> <span class="n">iters</span> <span class="o">==</span> <span class="n">iterations</span><span class="p">:</span>
+        <span class="n">convergence</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Matrix failed to converge.&#39;</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span>
+                        <span class="s1">&#39;Clustering with partial network. &#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">scoremat</span><span class="p">,</span> <span class="n">memory</span><span class="p">,</span> <span class="n">diffs</span></div>
+
+
+<div class="viewcode-block" id="partial_diffusion"><a class="viewcode-back" href="../../manta.html#manta.flow.partial_diffusion">[docs]</a><span class="k">def</span> <span class="nf">partial_diffusion</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">iterations</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">ratio</span><span class="p">,</span> <span class="n">permutations</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Partial diffusion process for generation of scoring matrix.</span>
+<span class="sd">    Some matrices may be unable to reach convergence</span>
+<span class="sd">    or enter a flip-flopping state.</span>
+<span class="sd">    A partial diffusion process can still discover relationships</span>
+<span class="sd">    between unlinked taxa when this is not possible.</span>
+
+<span class="sd">    The partial diffusion process takes a random subgraph and</span>
+<span class="sd">    checks whether this subgraph is balanced. If it is, the full diffusion process</span>
+<span class="sd">    is carried out. Otherwise, one iteration is carried out.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param graph: NetworkX graph of a microbial assocation network</span>
+<span class="sd">    :param iterations: Maximum number of iterations to carry out</span>
+<span class="sd">    :param limit: Percentage in error decrease until matrix is considered converged</span>
+<span class="sd">    :param subset: Fraction of edges used in subsetting procedure</span>
+<span class="sd">    :param ratio: Ratio of positive / negative edges required for edge stability</span>
+<span class="sd">    :param permutations: Number of permutations for network subsetting</span>
+<span class="sd">    :param verbose: Verbosity level of function</span>
+<span class="sd">    :return: score matrix, memory effect, initial diffusion matrix</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># scoremat indices are ordered by graph.nodes()</span>
+    <span class="n">scoremat</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">to_numpy_array</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+    <span class="n">mat_index</span> <span class="o">=</span> <span class="p">{</span><span class="nb">list</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">)[</span><span class="n">i</span><span class="p">]:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">))}</span>
+    <span class="n">nums</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span><span class="o">*</span><span class="n">subset</span><span class="p">)</span>  <span class="c1"># fraction of edges in subnetwork set to 0</span>
+    <span class="c1"># this fraction can be set to 0.8 or higher, gives good results</span>
+    <span class="c1"># results in file manta_ratio_perm.csv</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+    <span class="n">subnum</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">permutations</span><span class="p">:</span>
+        <span class="n">subnum</span> <span class="o">=</span> <span class="n">permutations</span>  <span class="c1"># number of subnetworks generated</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="n">b</span> <span class="o">&lt;</span> <span class="n">subnum</span><span class="p">:</span>
+        <span class="c1"># only add 1 to b if below snippet completes</span>
+        <span class="c1"># otherwise, keep iterating</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">sample</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">,</span> <span class="n">nums</span><span class="p">)</span>
+        <span class="n">num_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">mat_index</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>
+        <span class="n">subgraph</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
+        <span class="c1"># we randomly sample from the nodes and create a subgraph from this</span>
+        <span class="c1"># this can give multiple connected components</span>
+        <span class="n">balanced</span> <span class="o">=</span> <span class="n">harary_components</span><span class="p">(</span><span class="n">subgraph</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="c1"># if there is a balanced component, carry out network flow separately</span>
+        <span class="n">balanced_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">scoremat</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">balanced</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="n">balanced_components</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">balanced</span> <span class="k">if</span> <span class="n">balanced</span><span class="p">[</span><span class="n">x</span><span class="p">]]</span>
+            <span class="k">for</span> <span class="n">component</span> <span class="ow">in</span> <span class="n">balanced_components</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">component</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
+                    <span class="c1"># get score matrix for balanced component</span>
+                    <span class="n">partial_score</span> <span class="o">=</span> <span class="n">diffusion</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="n">component</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span>
+                                              <span class="n">iterations</span><span class="o">=</span><span class="n">iterations</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="c1"># map score matrix to balanced_matrix</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">partial_score</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">partial_score</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                            <span class="n">node_ids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">component</span><span class="o">.</span><span class="n">nodes</span><span class="p">)[</span><span class="n">i</span><span class="p">],</span>
+                                        <span class="nb">list</span><span class="p">(</span><span class="n">component</span><span class="o">.</span><span class="n">nodes</span><span class="p">)[</span><span class="n">j</span><span class="p">]]</span>
+                            <span class="n">mat_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">mat_index</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">node_ids</span><span class="p">]</span>
+                            <span class="n">balanced_matrix</span><span class="p">[</span><span class="n">mat_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">mat_ids</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">partial_score</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span>
+            <span class="c1"># carry out 1 step propagation on entire matrix</span>
+        <span class="n">submat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">scoremat</span><span class="p">)</span>
+        <span class="n">submat</span><span class="p">[</span><span class="n">num_indices</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">submat</span><span class="p">[:,</span> <span class="n">num_indices</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1"># if there is no flip-flop state, the error will decrease after convergence</span>
+        <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_power</span><span class="p">(</span><span class="n">submat</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># it is possible that a feature reaches nan</span>
+            <span class="c1"># in this case, iteration is repeated</span>
+            <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">nditer</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">,</span> <span class="n">op_flags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;readwrite&#39;</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">value</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">value</span><span class="p">)</span>
+        <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span>
+        <span class="c1"># the permutation matrix is a combination of balanced components</span>
+        <span class="c1"># and a propagation step (1-step expansion + inflation)</span>
+        <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">+</span> <span class="n">balanced_matrix</span>
+        <span class="c1"># normalize again</span>
+        <span class="n">updated_mat</span> <span class="o">=</span> <span class="n">updated_mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">))</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">updated_mat</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Partial diffusion &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
+    <span class="n">posfreq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)))</span>
+    <span class="n">negfreq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)))</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">subnum</span><span class="p">):</span>
+        <span class="n">posfreq</span><span class="p">[</span><span class="n">result</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">negfreq</span><span class="p">[</span><span class="n">result</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="c1"># we count how many times specific values in matrix have</span>
+    <span class="c1"># been assigned positive or negative values</span>
+    <span class="n">outcome</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)))</span>
+    <span class="c1"># add pseudo count of 1 to prevent errors with zero divison</span>
+    <span class="n">posfreq</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">pos_results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">posfreq</span> <span class="o">-</span> <span class="n">negfreq</span><span class="p">)</span> <span class="o">/</span> <span class="n">posfreq</span> <span class="o">&gt;</span> <span class="n">ratio</span><span class="p">)</span>
+    <span class="n">negfreq</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">neg_results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">negfreq</span> <span class="o">-</span> <span class="n">posfreq</span><span class="p">)</span> <span class="o">/</span> <span class="n">negfreq</span> <span class="o">&gt;</span> <span class="n">ratio</span><span class="p">)</span>
+    <span class="c1"># if the number of positive/negative values is large enough,</span>
+    <span class="c1"># this edge can be considered stable</span>
+    <span class="c1"># the section below adds only positive values</span>
+    <span class="c1"># for edges that are stable (negatively)</span>
+    <span class="n">outcome</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph</span><span class="p">)))</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">subnum</span><span class="p">):</span>
+        <span class="n">pos_sums</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="n">b</span><span class="p">][</span><span class="n">pos_results</span><span class="p">]</span>
+        <span class="n">pos_sums</span><span class="p">[</span><span class="n">pos_sums</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">outcome</span><span class="p">[</span><span class="n">pos_results</span><span class="p">]</span> <span class="o">+=</span> <span class="n">pos_sums</span>
+        <span class="n">neg_sums</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="n">b</span><span class="p">][</span><span class="n">neg_results</span><span class="p">]</span>
+        <span class="n">neg_sums</span><span class="p">[</span><span class="n">neg_sums</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">outcome</span><span class="p">[</span><span class="n">neg_results</span><span class="p">]</span> <span class="o">+=</span> <span class="n">neg_sums</span>
+    <span class="n">outcome</span> <span class="o">=</span> <span class="n">outcome</span> <span class="o">/</span> <span class="nb">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">outcome</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">outcome</span><span class="p">,</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="harary_components"><a class="viewcode-back" href="../../manta.html#manta.flow.harary_components">[docs]</a><span class="k">def</span> <span class="nf">harary_components</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This wrapper for the balance test can accept graphs</span>
+<span class="sd">    that consist of multiple  connected components.</span>
+
+<span class="sd">    :param graph: NetworkX graph</span>
+<span class="sd">    :param verbose: Prints result of test to logger if True</span>
+<span class="sd">    :return: Returns a dictionary with connected components as keys;</span>
+<span class="sd">             components that are balanced have a True value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">all_components</span> <span class="o">=</span> <span class="p">[</span><span class="n">graph</span><span class="p">]</span>
+    <span class="n">component_balance</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">nx</span><span class="o">.</span><span class="n">is_connected</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
+        <span class="n">all_components</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">component_generator</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">connected_components</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">component</span> <span class="ow">in</span> <span class="n">component_generator</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">component</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">all_components</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nx</span><span class="o">.</span><span class="n">subgraph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">component</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">component</span> <span class="ow">in</span> <span class="n">all_components</span><span class="p">:</span>
+        <span class="n">component_balance</span><span class="p">[</span><span class="n">component</span><span class="p">]</span> <span class="o">=</span> <span class="n">harary_balance</span><span class="p">(</span><span class="n">component</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">component_balance</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">component_balance</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph is balanced.&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">all</span><span class="p">(</span><span class="n">component_balance</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;All connected components of the graph are balanced.&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">any</span><span class="p">(</span><span class="n">component_balance</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;At least one connected component of the graph&quot;</span>
+                        <span class="s2">&quot; is balanced.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph is unbalanced.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">component_balance</span></div>
+
+
+<div class="viewcode-block" id="harary_balance"><a class="viewcode-back" href="../../manta.html#manta.flow.harary_balance">[docs]</a><span class="k">def</span> <span class="nf">harary_balance</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Checks whether a graph is balanced according to Harary&#39;s theorem.</span>
+<span class="sd">    Python implementation of the algorithm as described in the article below.</span>
+<span class="sd">    Harary&#39;s algorithm quickly finds whether a signed graph is balanced.</span>
+<span class="sd">    A signed graph is balanced if the product of edge signs around</span>
+<span class="sd">    every circle is positive.</span>
+
+<span class="sd">    Harary, F., &amp; Kabell, J. A. (1980).</span>
+<span class="sd">    A simple algorithm to detect balance in signed graphs.</span>
+<span class="sd">    Mathematical Social Sciences, 1(1), 131-136.</span>
+<span class="sd">    :param graph: NetworkX graph</span>
+<span class="sd">    :return: Returns a dictionary with connected components as keys;</span>
+<span class="sd">             components that are balanced have a True value.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Step 1: Select a spanning tree T</span>
+    <span class="n">balance</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">tree</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">minimum_spanning_tree</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+    <span class="n">marks</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">nodes</span><span class="p">)</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+    <span class="c1"># Step 2: Root T at an arbitrary point v0</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">sample</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">nodes</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># Step 3: Mark v0 positive</span>
+    <span class="n">marks</span><span class="p">[</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">balance</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">lines</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+        <span class="c1"># Step 7: Is there a line that has not been tested?</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">marks</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="c1"># Step 6: Is there a value that has not been tested?</span>
+            <span class="n">step4</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">step4</span><span class="p">:</span>
+                <span class="c1"># Step 4: Select an unsigned point adjacent in T to a signed point</span>
+                <span class="c1"># get all unsigned nodes</span>
+                <span class="n">unsigned</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">marks</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">marks</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+                <span class="c1"># find an unsigned node that is a neighbour of a signed node</span>
+                <span class="n">signed</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">marks</span> <span class="k">if</span> <span class="n">marks</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+                <span class="k">for</span> <span class="n">unsign</span> <span class="ow">in</span> <span class="n">unsigned</span><span class="p">:</span>
+                    <span class="n">match</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">nx</span><span class="o">.</span><span class="n">neighbors</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span> <span class="n">unsign</span><span class="p">))</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">signed</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">match</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">step4</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">match</span> <span class="o">=</span> <span class="n">sample</span><span class="p">(</span><span class="n">match</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                        <span class="c1"># Step 5: Label the selected point with the product</span>
+                        <span class="c1"># of the sign of the previously point to which it is</span>
+                        <span class="c1"># adjacent in T and the sign of the line joining them</span>
+                        <span class="n">marks</span><span class="p">[</span><span class="n">unsign</span><span class="p">]</span> <span class="o">=</span> <span class="n">marks</span><span class="p">[</span><span class="n">match</span><span class="p">]</span> <span class="o">*</span> <span class="n">tree</span><span class="p">[</span><span class="n">match</span><span class="p">][</span><span class="n">unsign</span><span class="p">][</span><span class="s1">&#39;weight&#39;</span><span class="p">]</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">lines</span><span class="p">[(</span><span class="n">unsign</span><span class="p">,</span> <span class="n">match</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                            <span class="n">lines</span><span class="p">[(</span><span class="n">match</span><span class="p">,</span> <span class="n">unsign</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="c1"># Step 8: Select an untested line of S - E(T)</span>
+        <span class="c1"># it is possible that all lines have been tested;</span>
+        <span class="c1"># in this case, the graph is balanced for sure</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">lines</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="n">untested</span> <span class="o">=</span> <span class="n">sample</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lines</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># Step 9: Is the sign of the selected line equal to the product</span>
+            <span class="c1"># of the signs of its two points?</span>
+            <span class="n">untested_sign</span> <span class="o">=</span> <span class="n">marks</span><span class="p">[</span><span class="n">untested</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">*</span> <span class="n">marks</span><span class="p">[</span><span class="n">untested</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+            <span class="k">if</span> <span class="n">untested_sign</span> <span class="o">==</span> <span class="n">graph</span><span class="o">.</span><span class="n">edges</span><span class="p">[</span><span class="n">untested</span><span class="p">][</span><span class="s1">&#39;weight&#39;</span><span class="p">]:</span>
+                <span class="n">lines</span><span class="p">[</span><span class="n">untested</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Step 10: Stop, S is not balanced</span>
+                <span class="n">balance</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">break</span>
+    <span class="k">return</span> <span class="n">balance</span></div>
+
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">manta</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Lisa Rottjers.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

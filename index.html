@@ -1,0 +1,165 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Welcome to manta’s documentation! &#8212; manta 0.4.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-manta">
+<span id="welcome-to-manta-s-documentation"></span><h1>Welcome to manta’s documentation!<a class="headerlink" href="#module-manta" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<p>manta: microbial association network clustering toolbox.
+The script takes a weighted and undirected network as input
+and uses this to generate network clusters.
+Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
+Detailed explanations are available in the headers of each file.</p>
+<p>manta uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
+These tables can be used to generate a layout for cyjson files.
+Other file formats do not export layout coordinates.</p>
+<p>manta generates a scoring matrix and uses agglomerative clustering to assign cluster identities.
+The scoring matrix is generated through a procedure involving network flow.
+Nodes that cluster separately are removed and combined with identified clusters later on.
+It is highly likely that networks will not converge neatly, as most real-world networks are unbalanced.
+In that case, manta will apply the network flow procedure on a subset of the network.</p>
+<p>The network flow procedure relies on the following assumption:
+positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
+The same is assumed for negative positions.
+The ratio defines which positions are considered mostly positive or mostly negative.</p>
+</div>
+<div class="section" id="default-numeric-parameters">
+<h1>Default numeric parameters:<a class="headerlink" href="#default-numeric-parameters" title="Permalink to this headline">¶</a></h1>
+<table class="docutils option-list" frame="void" rules="none">
+<col class="option" />
+<col class="description" />
+<tbody valign="top">
+<tr><td class="option-group">
+<kbd><span class="option">-m<var>in</var></span></kbd></td>
+<td>Minimum number of clusters. Default: 2.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-m<var>s</var></span></kbd></td>
+<td>Minimum cluster size as fraction of network size. Default: 0.2.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-m<var>ax</var></span></kbd></td>
+<td>Maximum number of clusters. Default: 4.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-l<var>imit</var></span></kbd></td>
+<td>The limit defines the minimum percentage decrease in error per iteration.
+If iterations do not decrease the error anymore, the matrix is considered converged. Default: 2.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-p<var>erm</var></span></kbd></td>
+<td>Number of permutation iterations for network subsetting during partial iterations. Default: number of nodes.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-s<var>ubset</var></span></kbd></td>
+<td>Fraction of edges that are used for subsetting if the input graph is not balanced. Default: 0.8.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-r<var>atio</var></span></kbd></td>
+<td>Fraction of scores that need to be positive or negative for edge scores to be considered stable. Default: 0.8.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-s<var>cale</var></span></kbd></td>
+<td>Edge scale used to separate out weak cluster assignments.
+The larger the edge scale, the larger the weak cluster. Default: 0.8.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-r<var>el</var></span></kbd></td>
+<td>Number of permutation iterations for reliability estimates.
+By default, this number is estimated from the number of dyadic pairs.</td></tr>
+<tr><td class="option-group">
+<kbd><span class="option">-e</span></kbd></td>
+<td>Fraction of edges to rewire for reliability tests. Default: 0.1.</td></tr>
+</tbody>
+</table>
+<p>For demo purposes, we included a network generated from oral samples of bats.
+This data was downloaded from QIITA: <a class="reference external" href="https://qiita.ucsd.edu/study/description/11815">https://qiita.ucsd.edu/study/description/11815</a>
+Lutz, H. L. et al. (2018). Associations between Afrotropical bats, parasites, and microbial symbionts. bioRxiv, 340109.</p>
+</div>
+<div class="section" id="indices">
+<h1>Indices<a class="headerlink" href="#indices" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">manta</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Lisa Rottjers.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

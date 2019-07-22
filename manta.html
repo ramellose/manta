@@ -1,0 +1,805 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>manta package &#8212; manta 0.4.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="manta-package">
+<h1>manta package<a class="headerlink" href="#manta-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-manta.cluster">
+<span id="manta-cluster-module"></span><h2>manta.cluster module<a class="headerlink" href="#module-manta.cluster" title="Permalink to this headline">¶</a></h2>
+<p>The clustering algorithm works in several steps to generate cluster assignments.</p>
+<ol class="arabic simple">
+<li>Generate a scoring matrix using a network flow strategy</li>
+<li>Cluster on the scoring matrix.</li>
+<li>In case the network displays memory effects, define weak nodes.</li>
+</ol>
+<p>The scoring matrix is first clustered with the AgglomerativeClustering algorithm.
+Because the network flow strategy can result in central values being separated from the clusters,
+agglomerative clustering is repeated on score matrices with removed high-scoring nodes
+until larger clusters are identified.
+After this step, clustering assignments are  set.
+However, if the network caused the scoring matrix to enter a flip-flop state,
+nodes can still be defined as ‘weak’.
+In this case, manta uses a shortest path strategy to assess whether nodes belong to a cluster
+or are in conflict with the cluster oscillator.</p>
+<dl class="function">
+<dt id="manta.cluster.cluster_graph">
+<code class="descclassname">manta.cluster.</code><code class="descname">cluster_graph</code><span class="sig-paren">(</span><em>graph</em>, <em>limit</em>, <em>max_clusters</em>, <em>min_clusters</em>, <em>min_cluster_size</em>, <em>iterations</em>, <em>subset</em>, <em>ratio</em>, <em>edgescale</em>, <em>permutations</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cluster.html#cluster_graph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cluster.cluster_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a networkx graph and carries out network clustering.
+The returned graph contains cluster assignments and weak assignments.
+If weight is available, this is considered during the diffusion process.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – Weighted, undirected networkx graph.</li>
+<li><strong>limit</strong> – Percentage in error decrease until matrix is considered converged.</li>
+<li><strong>max_clusters</strong> – Maximum number of clusters to evaluate in K-means clustering.</li>
+<li><strong>min_clusters</strong> – Minimum number of clusters to evaluate in K-means clustering.</li>
+<li><strong>min_cluster_size</strong> – Minimum cluster size as fraction of network size</li>
+<li><strong>iterations</strong> – If algorithm does not converge, it stops here.</li>
+<li><strong>subset</strong> – Fraction of edges used in subsetting procedure</li>
+<li><strong>ratio</strong> – Ratio of scores that need to be positive or negative for a stable edge</li>
+<li><strong>edgescale</strong> – Mean edge weight for node removal</li>
+<li><strong>permutations</strong> – Number of permutations for partial iterations</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">NetworkX graph, score matrix and diffusion matrix.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.cluster.cluster_hard">
+<code class="descclassname">manta.cluster.</code><code class="descname">cluster_hard</code><span class="sig-paren">(</span><em>graph</em>, <em>adj_index</em>, <em>rev_index</em>, <em>scoremat</em>, <em>max_clusters</em>, <em>min_clusters</em>, <em>min_cluster_size</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cluster.html#cluster_hard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cluster.cluster_hard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Agglomerative clustering is used to separate nodes based on the scoring matrix.
+Because the scoring matrix generally results in separation of ‘central’ nodes,
+these nodes are removed and clustering is repeated until larger clusters are identified.
+Afterwards, the nodes are assigned to clusters based on a shortest path strategy.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX weighted, undirected graph</li>
+<li><strong>adj_index</strong> – Index matching matrix index to node ID</li>
+<li><strong>rev_index</strong> – Index matching node ID to matrix index</li>
+<li><strong>scoremat</strong> – Converged diffusion matrix</li>
+<li><strong>max_clusters</strong> – Maximum cluster number</li>
+<li><strong>min_clusters</strong> – Minimum cluster number</li>
+<li><strong>min_cluster_size</strong> – Minimum cluster size as fraction of network size</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Dictionary of nodes with cluster assignments</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.cluster.cluster_weak">
+<code class="descclassname">manta.cluster.</code><code class="descname">cluster_weak</code><span class="sig-paren">(</span><em>graph</em>, <em>diffs</em>, <em>cluster</em>, <em>edgescale</em>, <em>adj_index</em>, <em>rev_index</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cluster.html#cluster_weak"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cluster.cluster_weak" title="Permalink to this definition">¶</a></dt>
+<dd><p>Although clusters can be assigned with cluster_hard, cluster_weak tests
+whether cluster assignments are in conflict with oscillator nodes present in clusters.</p>
+<p>Oscillators can only be defined from flip-flopping states;
+hence, this function should not be called for scoring matrices that converge to -1 and 1.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX weighted, undirected graph</li>
+<li><strong>diffs</strong> – Diffusion matrices from flip-flop states generated by diffusion</li>
+<li><strong>cluster</strong> – Cluster assignment</li>
+<li><strong>edgescale</strong> – Mean edge weight for node removal</li>
+<li><strong>adj_index</strong> – Node index</li>
+<li><strong>rev_index</strong> – Reverse node index</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Vector with cluster assignments</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.cluster.sparsity_score">
+<code class="descclassname">manta.cluster.</code><code class="descname">sparsity_score</code><span class="sig-paren">(</span><em>graph</em>, <em>clusters</em>, <em>rev_index</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cluster.html#sparsity_score"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cluster.sparsity_score" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a graph, and a list of cluster identities,
+this function calculates how many edges need to be cut
+to assign these cluster identities.
+Cuts through positively-weighted edges are penalized,
+whereas cuts through negatively-weighted edges are rewarded.
+The lowest sparsity score represents the best clustering.
+Because this sparsity score rewards cluster assignments
+that separate out negative hubs.
+This penalty ensures that nodes with some intra-cluster
+negative edges are still assigned to clusters where
+they predominantly co-occur with other cluster members.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX weighted, undirected graph</li>
+<li><strong>clusters</strong> – List of cluster identities</li>
+<li><strong>rev_index</strong> – Index matching node ID to matrix index</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Sparsity score</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta.cyjson">
+<span id="manta-cyjson-module"></span><h2>manta.cyjson module<a class="headerlink" href="#module-manta.cyjson" title="Permalink to this headline">¶</a></h2>
+<p>Although NetworkX already contains read/write utilities for Cyjson networks,
+these do not accomodate networks without an index (e.g. those generated with CoNet).
+Moreover, they do not support inclusion of a network layout.
+The functions below have been adapted to tackle these issues.
+They are derived from the original NetworkX cytoscape_graph functions.</p>
+<blockquote>
+<div><p>NetworkX is distributed with the 3-clause BSD license.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Copyright</span> <span class="p">(</span><span class="n">C</span><span class="p">)</span> <span class="mi">2004</span><span class="o">-</span><span class="mi">2018</span><span class="p">,</span> <span class="n">NetworkX</span> <span class="n">Developers</span>
+<span class="n">Aric</span> <span class="n">Hagberg</span> <span class="o">&lt;</span><span class="n">hagberg</span><span class="nd">@lanl</span><span class="o">.</span><span class="n">gov</span><span class="o">&gt;</span>
+<span class="n">Dan</span> <span class="n">Schult</span> <span class="o">&lt;</span><span class="n">dschult</span><span class="nd">@colgate</span><span class="o">.</span><span class="n">edu</span><span class="o">&gt;</span>
+<span class="n">Pieter</span> <span class="n">Swart</span> <span class="o">&lt;</span><span class="n">swart</span><span class="nd">@lanl</span><span class="o">.</span><span class="n">gov</span><span class="o">&gt;</span>
+<span class="n">All</span> <span class="n">rights</span> <span class="n">reserved</span><span class="o">.</span>
+<span class="n">Redistribution</span> <span class="ow">and</span> <span class="n">use</span> <span class="ow">in</span> <span class="n">source</span> <span class="ow">and</span> <span class="n">binary</span> <span class="n">forms</span><span class="p">,</span> <span class="k">with</span> <span class="ow">or</span> <span class="n">without</span>
+<span class="n">modification</span><span class="p">,</span> <span class="n">are</span> <span class="n">permitted</span> <span class="n">provided</span> <span class="n">that</span> <span class="n">the</span> <span class="n">following</span> <span class="n">conditions</span> <span class="n">are</span>
+<span class="n">met</span><span class="p">:</span>
+  <span class="o">*</span> <span class="n">Redistributions</span> <span class="n">of</span> <span class="n">source</span> <span class="n">code</span> <span class="n">must</span> <span class="n">retain</span> <span class="n">the</span> <span class="n">above</span> <span class="n">copyright</span>
+    <span class="n">notice</span><span class="p">,</span> <span class="n">this</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">conditions</span> <span class="ow">and</span> <span class="n">the</span> <span class="n">following</span> <span class="n">disclaimer</span><span class="o">.</span>
+  <span class="o">*</span> <span class="n">Redistributions</span> <span class="ow">in</span> <span class="n">binary</span> <span class="n">form</span> <span class="n">must</span> <span class="n">reproduce</span> <span class="n">the</span> <span class="n">above</span>
+    <span class="n">copyright</span> <span class="n">notice</span><span class="p">,</span> <span class="n">this</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">conditions</span> <span class="ow">and</span> <span class="n">the</span> <span class="n">following</span>
+    <span class="n">disclaimer</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">documentation</span> <span class="ow">and</span><span class="o">/</span><span class="ow">or</span> <span class="n">other</span> <span class="n">materials</span> <span class="n">provided</span>
+    <span class="k">with</span> <span class="n">the</span> <span class="n">distribution</span><span class="o">.</span>
+  <span class="o">*</span> <span class="n">Neither</span> <span class="n">the</span> <span class="n">name</span> <span class="n">of</span> <span class="n">the</span> <span class="n">NetworkX</span> <span class="n">Developers</span> <span class="n">nor</span> <span class="n">the</span> <span class="n">names</span> <span class="n">of</span> <span class="n">its</span>
+    <span class="n">contributors</span> <span class="n">may</span> <span class="n">be</span> <span class="n">used</span> <span class="n">to</span> <span class="n">endorse</span> <span class="ow">or</span> <span class="n">promote</span> <span class="n">products</span> <span class="n">derived</span>
+    <span class="kn">from</span> <span class="nn">this</span> <span class="n">software</span> <span class="n">without</span> <span class="n">specific</span> <span class="n">prior</span> <span class="n">written</span> <span class="n">permission</span><span class="o">.</span>
+<span class="n">THIS</span> <span class="n">SOFTWARE</span> <span class="n">IS</span> <span class="n">PROVIDED</span> <span class="n">BY</span> <span class="n">THE</span> <span class="n">COPYRIGHT</span> <span class="n">HOLDERS</span> <span class="n">AND</span> <span class="n">CONTRIBUTORS</span>
+<span class="s2">&quot;AS IS&quot;</span> <span class="n">AND</span> <span class="n">ANY</span> <span class="n">EXPRESS</span> <span class="n">OR</span> <span class="n">IMPLIED</span> <span class="n">WARRANTIES</span><span class="p">,</span> <span class="n">INCLUDING</span><span class="p">,</span> <span class="n">BUT</span> <span class="n">NOT</span>
+<span class="n">LIMITED</span> <span class="n">TO</span><span class="p">,</span> <span class="n">THE</span> <span class="n">IMPLIED</span> <span class="n">WARRANTIES</span> <span class="n">OF</span> <span class="n">MERCHANTABILITY</span> <span class="n">AND</span> <span class="n">FITNESS</span> <span class="n">FOR</span>
+<span class="n">A</span> <span class="n">PARTICULAR</span> <span class="n">PURPOSE</span> <span class="n">ARE</span> <span class="n">DISCLAIMED</span><span class="o">.</span> <span class="n">IN</span> <span class="n">NO</span> <span class="n">EVENT</span> <span class="n">SHALL</span> <span class="n">THE</span> <span class="n">COPYRIGHT</span>
+<span class="n">OWNER</span> <span class="n">OR</span> <span class="n">CONTRIBUTORS</span> <span class="n">BE</span> <span class="n">LIABLE</span> <span class="n">FOR</span> <span class="n">ANY</span> <span class="n">DIRECT</span><span class="p">,</span> <span class="n">INDIRECT</span><span class="p">,</span> <span class="n">INCIDENTAL</span><span class="p">,</span>
+<span class="n">SPECIAL</span><span class="p">,</span> <span class="n">EXEMPLARY</span><span class="p">,</span> <span class="n">OR</span> <span class="n">CONSEQUENTIAL</span> <span class="n">DAMAGES</span> <span class="p">(</span><span class="n">INCLUDING</span><span class="p">,</span> <span class="n">BUT</span> <span class="n">NOT</span>
+<span class="n">LIMITED</span> <span class="n">TO</span><span class="p">,</span> <span class="n">PROCUREMENT</span> <span class="n">OF</span> <span class="n">SUBSTITUTE</span> <span class="n">GOODS</span> <span class="n">OR</span> <span class="n">SERVICES</span><span class="p">;</span> <span class="n">LOSS</span> <span class="n">OF</span> <span class="n">USE</span><span class="p">,</span>
+<span class="n">DATA</span><span class="p">,</span> <span class="n">OR</span> <span class="n">PROFITS</span><span class="p">;</span> <span class="n">OR</span> <span class="n">BUSINESS</span> <span class="n">INTERRUPTION</span><span class="p">)</span> <span class="n">HOWEVER</span> <span class="n">CAUSED</span> <span class="n">AND</span> <span class="n">ON</span> <span class="n">ANY</span>
+<span class="n">THEORY</span> <span class="n">OF</span> <span class="n">LIABILITY</span><span class="p">,</span> <span class="n">WHETHER</span> <span class="n">IN</span> <span class="n">CONTRACT</span><span class="p">,</span> <span class="n">STRICT</span> <span class="n">LIABILITY</span><span class="p">,</span> <span class="n">OR</span> <span class="n">TORT</span>
+<span class="p">(</span><span class="n">INCLUDING</span> <span class="n">NEGLIGENCE</span> <span class="n">OR</span> <span class="n">OTHERWISE</span><span class="p">)</span> <span class="n">ARISING</span> <span class="n">IN</span> <span class="n">ANY</span> <span class="n">WAY</span> <span class="n">OUT</span> <span class="n">OF</span> <span class="n">THE</span> <span class="n">USE</span>
+<span class="n">OF</span> <span class="n">THIS</span> <span class="n">SOFTWARE</span><span class="p">,</span> <span class="n">EVEN</span> <span class="n">IF</span> <span class="n">ADVISED</span> <span class="n">OF</span> <span class="n">THE</span> <span class="n">POSSIBILITY</span> <span class="n">OF</span> <span class="n">SUCH</span> <span class="n">DAMAGE</span><span class="o">.</span>
+</pre></div>
+</div>
+</div></blockquote>
+<dl class="function">
+<dt id="manta.cyjson.read_cyjson">
+<code class="descclassname">manta.cyjson.</code><code class="descname">read_cyjson</code><span class="sig-paren">(</span><em>filename</em>, <em>direction=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cyjson.html#read_cyjson"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cyjson.read_cyjson" title="Permalink to this definition">¶</a></dt>
+<dd><p>Small utility function for reading Cytoscape json files
+generated with CoNet.
+Parameters
+———-
+:param filename: Filepath to location of cyjs file.
+:param direction: If true, graph is imported as a NetworkX DiGraph
+:return: NetworkX graph.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.cyjson.write_cyjson">
+<code class="descclassname">manta.cyjson.</code><code class="descname">write_cyjson</code><span class="sig-paren">(</span><em>filename</em>, <em>graph</em>, <em>layout=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/cyjson.html#write_cyjson"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.cyjson.write_cyjson" title="Permalink to this definition">¶</a></dt>
+<dd><p>Small utility function for writing Cytoscape json files.
+Also accepts a layout dictionary to add to the file.
+Parameters
+———-
+:param filename: Filepath to location of cyjs file.
+:param graph: NetworkX graph to write to disk.
+:param layout: Dictionary of layout coordinates that is written to cyjs file.
+:return:</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta.flow">
+<span id="manta-flow-module"></span><h2>manta.flow module<a class="headerlink" href="#module-manta.flow" title="Permalink to this headline">¶</a></h2>
+<p>Cluster assignment by manta makes use of a scoring matrix.
+Functions in this module can generate such a scoring matrix.</p>
+<p>First, an empty adjacency matrix is instantiated.
+Then, the following steps are carried out until an error threshold is reached:</p>
+<ol class="arabic simple">
+<li>Raise the matrix to power 2</li>
+<li>Normalize matrix by absolute maximum value</li>
+<li>Add 1 / value for each value in matrix</li>
+<li>Normalize matrix by absolute maximum value</li>
+<li>Calculate error by subtracting previous matrix from current matrix</li>
+</ol>
+<p>If a network consists of clusters connected by positive edges,
+it will frequently fail to reach the error threshold.
+This can happen because of two reasons: firstly, the scoring matrix enters a flip-flop state.
+Secondly, the matrix converges to zero.
+Flip-flop states are detected by comparing the error to the error 2 iterations ago.
+If this error is 99% identical, manta continues clustering with a partial iteration strategy.
+Zero convergence is detected when the threshold of the 99th percentile
+is below 0.00000001.
+In either of these cases, manta proceeds with a partial iteration strategy.
+This strategy repeats the same steps as the normal network flow strategy,
+but does so on a subset of the network.
+The scoring matrix is then recovered from stable edges;
+stable edges are defined as edges that have only positive or negative values during a minimum fraction of permutations.
+Those permutations are summed together to give positions in the scoring matrix.</p>
+<dl class="function">
+<dt id="manta.flow.diffusion">
+<code class="descclassname">manta.flow.</code><code class="descname">diffusion</code><span class="sig-paren">(</span><em>graph</em>, <em>iterations</em>, <em>limit</em>, <em>verbose</em>, <em>norm=True</em>, <em>inflation=True</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/flow.html#diffusion"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.flow.diffusion" title="Permalink to this definition">¶</a></dt>
+<dd><p>Diffusion process for generation of scoring matrix.
+The implementation of this process is similar
+to the MCL algorithm. However, the rescaling step
+in the MCL algorithm has been adjusted to accomodate
+for negative signs.
+In the first step, the matrix is scaled;
+afterwards, every value in the matrix has 1 divided by the value added.
+Subsequently, the matrix is scaled. The
+cumulative error, relative to the previous iteration,
+is calculated by taking the mean of the difference.</p>
+<p>If a memory effect is detected, not the outcome matrix but the first iteration is returned.
+Additionally, 5 iterations after the flip-flop state has been reached are calculated.</p>
+<p>Normally, memory effects should not be detected because these only happen
+if the graph is unbalanced.
+The Harary algorithm is used to check whether graphs are unbalanced.
+If they are, this diffusion process should not be run.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph of a microbial assocation network</li>
+<li><strong>iterations</strong> – Maximum number of iterations to carry out</li>
+<li><strong>limit</strong> – Percentage in error decrease until matrix is considered converged</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+<li><strong>norm</strong> – Normalize values so they converge to -1 or 1</li>
+<li><strong>inflation</strong> – Carry out network diffusion with/without inflation</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">score matrix, memory effect</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.flow.harary_balance">
+<code class="descclassname">manta.flow.</code><code class="descname">harary_balance</code><span class="sig-paren">(</span><em>graph</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/flow.html#harary_balance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.flow.harary_balance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a graph is balanced according to Harary’s theorem.
+Python implementation of the algorithm as described in the article below.
+Harary’s algorithm quickly finds whether a signed graph is balanced.
+A signed graph is balanced if the product of edge signs around
+every circle is positive.</p>
+<p>Harary, F., &amp; Kabell, J. A. (1980).
+A simple algorithm to detect balance in signed graphs.
+Mathematical Social Sciences, 1(1), 131-136.
+:param graph: NetworkX graph
+:return: Returns a dictionary with connected components as keys;</p>
+<blockquote>
+<div>components that are balanced have a True value.</div></blockquote>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.flow.harary_components">
+<code class="descclassname">manta.flow.</code><code class="descname">harary_components</code><span class="sig-paren">(</span><em>graph</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/flow.html#harary_components"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.flow.harary_components" title="Permalink to this definition">¶</a></dt>
+<dd><p>This wrapper for the balance test can accept graphs
+that consist of multiple  connected components.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph</li>
+<li><strong>verbose</strong> – Prints result of test to logger if True</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Returns a dictionary with connected components as keys;
+components that are balanced have a True value.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.flow.partial_diffusion">
+<code class="descclassname">manta.flow.</code><code class="descname">partial_diffusion</code><span class="sig-paren">(</span><em>graph</em>, <em>iterations</em>, <em>limit</em>, <em>subset</em>, <em>ratio</em>, <em>permutations</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/flow.html#partial_diffusion"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.flow.partial_diffusion" title="Permalink to this definition">¶</a></dt>
+<dd><p>Partial diffusion process for generation of scoring matrix.
+Some matrices may be unable to reach convergence
+or enter a flip-flopping state.
+A partial diffusion process can still discover relationships
+between unlinked taxa when this is not possible.</p>
+<p>The partial diffusion process takes a random subgraph and
+checks whether this subgraph is balanced. If it is, the full diffusion process
+is carried out. Otherwise, one iteration is carried out.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph of a microbial assocation network</li>
+<li><strong>iterations</strong> – Maximum number of iterations to carry out</li>
+<li><strong>limit</strong> – Percentage in error decrease until matrix is considered converged</li>
+<li><strong>subset</strong> – Fraction of edges used in subsetting procedure</li>
+<li><strong>ratio</strong> – Ratio of positive / negative edges required for edge stability</li>
+<li><strong>permutations</strong> – Number of permutations for network subsetting</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">score matrix, memory effect, initial diffusion matrix</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta.layout">
+<span id="manta-layout-module"></span><h2>manta.layout module<a class="headerlink" href="#module-manta.layout" title="Permalink to this headline">¶</a></h2>
+<p>These functions generate a layout for microbial association networks.
+Instead of using default edge weight, a different edge weight is calculated
+that can take taxonomic similarity as well as structural similarity into account.
+Nodes that share taxonomic features will be located more closely together,
+as well as nodes that share neighbours.</p>
+<p>The function uses this alternative edge weight to run the Fruchterman-Reingold force-directed algorithm.
+This algorithm is run once per cluster.
+The generated layouts are then rotated depending on the number of clusters and combined.</p>
+<dl class="function">
+<dt id="manta.layout.generate_layout">
+<code class="descclassname">manta.layout.</code><code class="descname">generate_layout</code><span class="sig-paren">(</span><em>graph</em>, <em>tax=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/layout.html#generate_layout"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.layout.generate_layout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a dictionary of layout coordinates.
+The layout is based on the Fruchterman-Reingold force-directed algorithm,
+where a layout is calculated for each of the clusters specified
+in the supplied NetworkX graph. These layouts are then shifted and combined
+into a full layout.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph with cluster IDs</li>
+<li><strong>tax</strong> – Filepath to tab-delimited taxonomy table.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">dictionary of layout coordinates</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.layout.generate_tax_weights">
+<code class="descclassname">manta.layout.</code><code class="descname">generate_tax_weights</code><span class="sig-paren">(</span><em>graph</em>, <em>tax</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/layout.html#generate_tax_weights"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.layout.generate_tax_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns supplied graph with node similarity as node properties.
+This node similarity is determined by
+similarity at different taxonomic levels and by structural similarity.
+The more similar nodes are, the larger their similarity score is;
+hence, force-directed layouts will place such nodes closer together.
+Assumes that species assignments of NA or None are not relevant.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph</li>
+<li><strong>tax</strong> – Taxonomy table</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta.main">
+<span id="manta-main-module"></span><h2>manta.main module<a class="headerlink" href="#module-manta.main" title="Permalink to this headline">¶</a></h2>
+<p>manta: microbial association network clustering toolbox.
+The script takes a weighted and undirected network as input
+and uses this to generate network clusters.
+Moreover, it can generate a Cytoscape-compatible layout (with optional taxonomy input).
+Detailed explanations are available in the headers of each file.</p>
+<p>The arguments for <em>manta</em> can be separated into 4 groups:</p>
+<ul class="simple">
+<li>Arguments for importing and exporting data.</li>
+<li>Arguments for network clustering.</li>
+<li>Arguments for network clustering on flip-flopping networks.</li>
+<li>Arguments for network centralities.</li>
+</ul>
+<p>The arguments for importing and exporting data include:</p>
+<ul class="simple">
+<li>-i Filepath to input network.</li>
+<li>-o Filepath to output network</li>
+<li>-f Filetype for output network</li>
+<li>-tax Filepath to taxonomy table.</li>
+<li>–layout If flagged, a layout is generated</li>
+<li>-dir If a directed network is imported, setting this to True converts the network to undirected.</li>
+<li>-b If flagged, all edge weights are converted to 1 and -1.</li>
+</ul>
+<p>manta uses the file extension to import networks. Taxonomy tables should be given as tab-delimited files.
+These tables can be used to generate a layout for cyjson files.
+Other file formats do not export layout coordinates.</p>
+<p>The arguments for network clustering include:</p>
+<ul class="simple">
+<li>-min Minimum cluster number</li>
+<li>-max Maximum cluster number</li>
+<li>-mc Minimum cluster size</li>
+<li>-limit Error limit until convergence is considered reached</li>
+<li>-iter Number of iterations to keep going if convergence is not reached</li>
+</ul>
+<p>manta uses agglomerative clustering on a scoring matrix to assign cluster identities.
+The scoring matrix is generated through a procedure involving network flow.
+Nodes that cluster separately are removed and combined with identified clusters later on.
+Hence, manta will not identify clusters of only 1 node.
+It is highly likely that networks will not converge neatly.
+In that case, manta will apply the network flow procedure on a subset of the network.</p>
+<p>The arguments for network clustering on flip-flopping networks include:</p>
+<ul class="simple">
+<li>-perm Number of permutations on network subsets</li>
+<li>-ratio Ratio of edges that need to be positive or negative to consider the edges stable through permutations.</li>
+<li>-scale Threshold for shortest path products to oscillators.</li>
+</ul>
+<p>The network flow procedure relies on the following assumption:
+positions in the scoring matrix that are mostly positive throughout permutations, should have only positive values added.
+The same is assumed for negative positions.
+The ratio defines which positions are considered mostly positive or mostly negative.</p>
+<p>For demo purposes, we included a network generated from data</p>
+<dl class="function">
+<dt id="manta.main.main">
+<code class="descclassname">manta.main.</code><code class="descname">main</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/main.html#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.main.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="manta.main.set_manta">
+<code class="descclassname">manta.main.</code><code class="descname">set_manta</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/main.html#set_manta"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.main.set_manta" title="Permalink to this definition">¶</a></dt>
+<dd><p>This parser gets input settings for running the <em>manta</em> clustering algorithm.
+Apart from the parameters specified by cluster_graph,
+it requires an input format that can be read by networkx.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta.reliability">
+<span id="manta-reliability-module"></span><h2>manta.reliability module<a class="headerlink" href="#module-manta.reliability" title="Permalink to this headline">¶</a></h2>
+<p>Centrality scores and cluster assignments can be tested for their reliability.
+The idea behind this test is that random rewiring should, to some extent,
+preserve the most central structures of the original graph.
+We cannot know which edges are true positives and which ones are false positives,
+but we do expect that global network properties are retained despite changes in identified associations.</p>
+<p>First, null models are generated from the original graph.
+These models are rewired copies: edge degree and connectedness are preserved.
+Weight is assigned randomly by sampling with replacement from the original weight scores.
+For each of these networks, the diffusion iterations specified in cluster_sparse are repeated
+as many times as for the original network. The outcome is then a matrix of diffusion scores.</p>
+<p>With these matrices, the reliability can be estimated. This error specifies how variable
+the assignments are expected to be.</p>
+<dl class="function">
+<dt id="manta.reliability.central_edge">
+<code class="descclassname">manta.reliability.</code><code class="descname">central_edge</code><span class="sig-paren">(</span><em>graph</em>, <em>percentile</em>, <em>permutations</em>, <em>error</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#central_edge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.central_edge" title="Permalink to this definition">¶</a></dt>
+<dd><p>The min / max values that are the result of the diffusion process
+are used as a centrality measure and define positive as well as negative hub associations.</p>
+<p>If the permutation number is set to a value above 0, the centrality values are tested against permuted graphs.</p>
+<p>The fraction of positive edges and negative edges is based on the ratio between
+positive and negative weights in the network.</p>
+<p>Hence, a network with 90 positive weights and 10 negative weights will have 90% positive hubs returned.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph of a microbial association network.</li>
+<li><strong>percentile</strong> – Determines percentile of hub species to return.</li>
+<li><strong>permutations</strong> – Number of permutations to carry out. If 0, no permutation test is done.</li>
+<li><strong>error</strong> – Fraction of edges to rewire for reliability metric.</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Networkx graph with hub ID / p-value as node property.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.central_node">
+<code class="descclassname">manta.reliability.</code><code class="descname">central_node</code><span class="sig-paren">(</span><em>graph</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#central_node"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.central_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a graph with hub edges assigned (see central_edge),
+this function checks whether a node is significantly more connected
+to edges with high scores than expected by chance.
+The p-value is calculated with a binomial test.
+Edge sign is ignored; hubs can have both positive and negative
+edges.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>graph</strong> – NetworkX graph with edge centrality scores assigned</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">NetworkX graph with hub centrality for nodes</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.jaccard_similarity_score">
+<code class="descclassname">manta.reliability.</code><code class="descname">jaccard_similarity_score</code><span class="sig-paren">(</span><em>vector1</em>, <em>vector2</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#jaccard_similarity_score"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.jaccard_similarity_score" title="Permalink to this definition">¶</a></dt>
+<dd><p>The sklearn implementation of the Jaccard similarity requires vectors to be equal length.
+This implementation does not.
+:param vector1: List of strings or numbers.
+:param vector2: List of strings or numbers.
+:return:</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.perm_clusters">
+<code class="descclassname">manta.reliability.</code><code class="descname">perm_clusters</code><span class="sig-paren">(</span><em>graph</em>, <em>limit</em>, <em>max_clusters</em>, <em>min_clusters</em>, <em>min_cluster_size</em>, <em>iterations</em>, <em>ratio</em>, <em>partialperms</em>, <em>relperms</em>, <em>error</em>, <em>verbose</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#perm_clusters"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.perm_clusters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calls the rewire_graph function and robustness function
+to compute robustness of cluster assignments.
+Scores close to 1 imply that the scores are robust to perturbation.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph of a microbial association network. Cluster assignment should be a network property.</li>
+<li><strong>limit</strong> – Percentage in error decrease until matrix is considered converged.</li>
+<li><strong>max_clusters</strong> – Maximum number of clusters to evaluate in K-means clustering.</li>
+<li><strong>min_clusters</strong> – Minimum number of clusters to evaluate in K-means clustering.</li>
+<li><strong>min_cluster_size</strong> – Minimum cluster size as fraction of network size</li>
+<li><strong>iterations</strong> – If algorithm does not converge, it stops here.</li>
+<li><strong>ratio</strong> – Ratio of scores that need to be positive or negative for a stable edge</li>
+<li><strong>partialperms</strong> – Number of permutations for partial diffusion.</li>
+<li><strong>relperms</strong> – Number of permutations for reliability testing.</li>
+<li><strong>error</strong> – Fraction of edges to rewire for reliability metric.</li>
+<li><strong>verbose</strong> – Verbosity level of function</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.perm_edges">
+<code class="descclassname">manta.reliability.</code><code class="descname">perm_edges</code><span class="sig-paren">(</span><em>graph</em>, <em>permutations</em>, <em>percentile</em>, <em>pos</em>, <em>neg</em>, <em>error</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#perm_edges"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.perm_edges" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calls the rewire_graph function;
+returns reliability scores of edge centrality scores.
+Scores close to 100 imply that the scores are robust to perturbation.
+Reliability scores as proposed by:
+Frantz, T. L., &amp; Carley, K. M. (2017).
+Reporting a network’s most-central actor with a confidence level.
+Computational and Mathematical Organization Theory, 23(2), 301-312.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – NetworkX graph of a microbial association network.</li>
+<li><strong>permutations</strong> – Number of permutations to carry out. If 0, no bootstrapping is done.</li>
+<li><strong>percentile</strong> – Determines percentile of hub species to return.</li>
+<li><strong>pos</strong> – List of edges in the upper percentile. (e.g. positive hubs)</li>
+<li><strong>neg</strong> – List of edges in the lower percentile. (e.g. negative hubs)</li>
+<li><strong>error</strong> – Fraction of edges to rewire for reliability metric.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">List of reliability scores.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.rewire_graph">
+<code class="descclassname">manta.reliability.</code><code class="descname">rewire_graph</code><span class="sig-paren">(</span><em>graph</em>, <em>error</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#rewire_graph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.rewire_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a rewired copy of the original graph.
+The rewiring procedure preserves degree of each node.
+The number of rewirings is the square of the node amount.
+This ensures the network is completely randomized.
+The weight of the edges also needs to be normalized.
+Therefore, after the network is randomized, weight is sampled
+from the original graph and added to the randomized graph.
+Because this does not take negative / positive hubs into account,
+the fraction of positive / negative weights per node
+is not preserved.</p>
+<p>Part of the rewire_graph function has been adapted from the original
+NetworkX double_edge_swap function. The adapted version also swaps edge weights.</p>
+<p>NetworkX is distributed with the 3-clause BSD license.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Copyright</span> <span class="p">(</span><span class="n">C</span><span class="p">)</span> <span class="mi">2004</span><span class="o">-</span><span class="mi">2018</span><span class="p">,</span> <span class="n">NetworkX</span> <span class="n">Developers</span>
+<span class="n">Aric</span> <span class="n">Hagberg</span> <span class="o">&lt;</span><span class="n">hagberg</span><span class="nd">@lanl</span><span class="o">.</span><span class="n">gov</span><span class="o">&gt;</span>
+<span class="n">Dan</span> <span class="n">Schult</span> <span class="o">&lt;</span><span class="n">dschult</span><span class="nd">@colgate</span><span class="o">.</span><span class="n">edu</span><span class="o">&gt;</span>
+<span class="n">Pieter</span> <span class="n">Swart</span> <span class="o">&lt;</span><span class="n">swart</span><span class="nd">@lanl</span><span class="o">.</span><span class="n">gov</span><span class="o">&gt;</span>
+<span class="n">All</span> <span class="n">rights</span> <span class="n">reserved</span><span class="o">.</span>
+<span class="n">Redistribution</span> <span class="ow">and</span> <span class="n">use</span> <span class="ow">in</span> <span class="n">source</span> <span class="ow">and</span> <span class="n">binary</span> <span class="n">forms</span><span class="p">,</span> <span class="k">with</span> <span class="ow">or</span> <span class="n">without</span>
+<span class="n">modification</span><span class="p">,</span> <span class="n">are</span> <span class="n">permitted</span> <span class="n">provided</span> <span class="n">that</span> <span class="n">the</span> <span class="n">following</span> <span class="n">conditions</span> <span class="n">are</span>
+<span class="n">met</span><span class="p">:</span>
+  <span class="o">*</span> <span class="n">Redistributions</span> <span class="n">of</span> <span class="n">source</span> <span class="n">code</span> <span class="n">must</span> <span class="n">retain</span> <span class="n">the</span> <span class="n">above</span> <span class="n">copyright</span>
+    <span class="n">notice</span><span class="p">,</span> <span class="n">this</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">conditions</span> <span class="ow">and</span> <span class="n">the</span> <span class="n">following</span> <span class="n">disclaimer</span><span class="o">.</span>
+  <span class="o">*</span> <span class="n">Redistributions</span> <span class="ow">in</span> <span class="n">binary</span> <span class="n">form</span> <span class="n">must</span> <span class="n">reproduce</span> <span class="n">the</span> <span class="n">above</span>
+    <span class="n">copyright</span> <span class="n">notice</span><span class="p">,</span> <span class="n">this</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">conditions</span> <span class="ow">and</span> <span class="n">the</span> <span class="n">following</span>
+    <span class="n">disclaimer</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">documentation</span> <span class="ow">and</span><span class="o">/</span><span class="ow">or</span> <span class="n">other</span> <span class="n">materials</span> <span class="n">provided</span>
+    <span class="k">with</span> <span class="n">the</span> <span class="n">distribution</span><span class="o">.</span>
+  <span class="o">*</span> <span class="n">Neither</span> <span class="n">the</span> <span class="n">name</span> <span class="n">of</span> <span class="n">the</span> <span class="n">NetworkX</span> <span class="n">Developers</span> <span class="n">nor</span> <span class="n">the</span> <span class="n">names</span> <span class="n">of</span> <span class="n">its</span>
+    <span class="n">contributors</span> <span class="n">may</span> <span class="n">be</span> <span class="n">used</span> <span class="n">to</span> <span class="n">endorse</span> <span class="ow">or</span> <span class="n">promote</span> <span class="n">products</span> <span class="n">derived</span>
+    <span class="kn">from</span> <span class="nn">this</span> <span class="n">software</span> <span class="n">without</span> <span class="n">specific</span> <span class="n">prior</span> <span class="n">written</span> <span class="n">permission</span><span class="o">.</span>
+<span class="n">THIS</span> <span class="n">SOFTWARE</span> <span class="n">IS</span> <span class="n">PROVIDED</span> <span class="n">BY</span> <span class="n">THE</span> <span class="n">COPYRIGHT</span> <span class="n">HOLDERS</span> <span class="n">AND</span> <span class="n">CONTRIBUTORS</span>
+<span class="s2">&quot;AS IS&quot;</span> <span class="n">AND</span> <span class="n">ANY</span> <span class="n">EXPRESS</span> <span class="n">OR</span> <span class="n">IMPLIED</span> <span class="n">WARRANTIES</span><span class="p">,</span> <span class="n">INCLUDING</span><span class="p">,</span> <span class="n">BUT</span> <span class="n">NOT</span>
+<span class="n">LIMITED</span> <span class="n">TO</span><span class="p">,</span> <span class="n">THE</span> <span class="n">IMPLIED</span> <span class="n">WARRANTIES</span> <span class="n">OF</span> <span class="n">MERCHANTABILITY</span> <span class="n">AND</span> <span class="n">FITNESS</span> <span class="n">FOR</span>
+<span class="n">A</span> <span class="n">PARTICULAR</span> <span class="n">PURPOSE</span> <span class="n">ARE</span> <span class="n">DISCLAIMED</span><span class="o">.</span> <span class="n">IN</span> <span class="n">NO</span> <span class="n">EVENT</span> <span class="n">SHALL</span> <span class="n">THE</span> <span class="n">COPYRIGHT</span>
+<span class="n">OWNER</span> <span class="n">OR</span> <span class="n">CONTRIBUTORS</span> <span class="n">BE</span> <span class="n">LIABLE</span> <span class="n">FOR</span> <span class="n">ANY</span> <span class="n">DIRECT</span><span class="p">,</span> <span class="n">INDIRECT</span><span class="p">,</span> <span class="n">INCIDENTAL</span><span class="p">,</span>
+<span class="n">SPECIAL</span><span class="p">,</span> <span class="n">EXEMPLARY</span><span class="p">,</span> <span class="n">OR</span> <span class="n">CONSEQUENTIAL</span> <span class="n">DAMAGES</span> <span class="p">(</span><span class="n">INCLUDING</span><span class="p">,</span> <span class="n">BUT</span> <span class="n">NOT</span>
+<span class="n">LIMITED</span> <span class="n">TO</span><span class="p">,</span> <span class="n">PROCUREMENT</span> <span class="n">OF</span> <span class="n">SUBSTITUTE</span> <span class="n">GOODS</span> <span class="n">OR</span> <span class="n">SERVICES</span><span class="p">;</span> <span class="n">LOSS</span> <span class="n">OF</span> <span class="n">USE</span><span class="p">,</span>
+<span class="n">DATA</span><span class="p">,</span> <span class="n">OR</span> <span class="n">PROFITS</span><span class="p">;</span> <span class="n">OR</span> <span class="n">BUSINESS</span> <span class="n">INTERRUPTION</span><span class="p">)</span> <span class="n">HOWEVER</span> <span class="n">CAUSED</span> <span class="n">AND</span> <span class="n">ON</span> <span class="n">ANY</span>
+<span class="n">THEORY</span> <span class="n">OF</span> <span class="n">LIABILITY</span><span class="p">,</span> <span class="n">WHETHER</span> <span class="n">IN</span> <span class="n">CONTRACT</span><span class="p">,</span> <span class="n">STRICT</span> <span class="n">LIABILITY</span><span class="p">,</span> <span class="n">OR</span> <span class="n">TORT</span>
+<span class="p">(</span><span class="n">INCLUDING</span> <span class="n">NEGLIGENCE</span> <span class="n">OR</span> <span class="n">OTHERWISE</span><span class="p">)</span> <span class="n">ARISING</span> <span class="n">IN</span> <span class="n">ANY</span> <span class="n">WAY</span> <span class="n">OUT</span> <span class="n">OF</span> <span class="n">THE</span> <span class="n">USE</span>
+<span class="n">OF</span> <span class="n">THIS</span> <span class="n">SOFTWARE</span><span class="p">,</span> <span class="n">EVEN</span> <span class="n">IF</span> <span class="n">ADVISED</span> <span class="n">OF</span> <span class="n">THE</span> <span class="n">POSSIBILITY</span> <span class="n">OF</span> <span class="n">SUCH</span> <span class="n">DAMAGE</span><span class="o">.</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graph</strong> – Original graph to rewire.</li>
+<li><strong>error</strong> – Fraction of edges to rewire.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Rewired NetworkX graph</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="manta.reliability.robustness">
+<code class="descclassname">manta.reliability.</code><code class="descname">robustness</code><span class="sig-paren">(</span><em>graphclusters</em>, <em>permutations</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/manta/reliability.html#robustness"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#manta.reliability.robustness" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compares vectors of cluster assignments to estimate cluster-wise robustness
+and node-wise robustness. These are returned as dictionaries.</p>
+<p>Inspired by reliablity scores as proposed by:
+Frantz, T. L., &amp; Carley, K. M. (2017).
+Reporting a network’s most-central actor with a confidence level.
+Computational and Mathematical Organization Theory, 23(2), 301-312.</p>
+<p>Because calculating the accuracy of a cluster assignment is not trivial,
+the function does not compare cluster labels directly.
+Instead, this function calculates the Jaccard similarity between cluster assignments.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>graphclusters</strong> – Dictionary of original cluster assignments</li>
+<li><strong>permutations</strong> – Number of permutations to compute robustness.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Two dictionaries of reliability scores (cluster-wise and node-wise).</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="module-manta">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-manta" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">manta</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Lisa Rottjers.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/manta.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
