@@ -234,7 +234,7 @@ def main():
     args = vars(args)
     if args['version']:
         info = VersionInfo('manta')
-        logger.info(info.version_string())
+        logger.info('Version ' + info.version_string())
     if args['graph'] != 'demo':
         filename = args['graph'].split(sep=".")
         extension = filename[len(filename)-1]
