@@ -144,7 +144,7 @@ def set_manta():
     parser.add_argument('-ms', '--min_size',
                         dest='ms', type=float,
                         required=False,
-                        help='Minimum cluster size as fraction of network size. Default: 0.1.',
+                        help='Minimum cluster size as fraction of network size. Default: 0.2.',
                         default=0.2)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,
@@ -173,7 +173,7 @@ def set_manta():
                         dest='subset', type=float,
                         required=False,
                         help='Fraction of edges that are used for subsetting'
-                             ' if the input graph is not balanced. ',
+                             ' if the input graph is not balanced. Default: 0.8.',
                         default=0.8)
     parser.add_argument('-ratio', '--stability_ratio',
                         dest='ratio', type=float,
@@ -189,7 +189,7 @@ def set_manta():
                         default=0.8)
     parser.add_argument('-cr, --cluster_reliability', dest='cr',
                         action='store_true',
-                        help='With this flag, reliability of cluster assignment is computed. ', required=False)
+                        help='If flagged, reliability of cluster assignment is computed. ', required=False)
     parser.set_defaults(cr=False)
     parser.add_argument('-rel', '--reliability_permutations',
                         dest='rel', type=int,
@@ -200,7 +200,7 @@ def set_manta():
     parser.add_argument('-e', '--error',
                         dest='error', type=int,
                         required=False,
-                        help='Fraction of edges to rewire for reliability tests. ',
+                        help='Fraction of edges to rewire for reliability tests. Default: 0.1.',
                         default=0.1)
     parser.add_argument('-dir', '--direction',
                         dest='direction',
@@ -213,12 +213,12 @@ def set_manta():
                         action='store_true',
                         required=False,
                         default=False,
-                        help='If flagged, edge weights are converted to 1 and -1.')
+                        help='If flagged, edge weights are converted to 1 and -1. ')
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         required=False,
                         action='store_true',
-                        help='Provides additional details on progress. ',
+                        help='If flagged, rovides additional details on progress. ',
                         default=False)
     parser.add_argument('-version', '--version',
                         dest='version',
@@ -298,7 +298,7 @@ def main():
         nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
     elif args['f'] == 'cyjs':
         write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
-    logger.info('Wrote clustered network to ' + args['fp'] + '.')
+    logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
     exit(0)
 
 
