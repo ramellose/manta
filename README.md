@@ -56,9 +56,8 @@ This software is still in early alpha. Any feedback or bug reports will be much 
 ## Authors
 
 * **Lisa Röttjers** - [ramellose](https://github.com/ramellose)
-* **Karoline Faust** - [hallucigenia-sparsa](https://github.com/hallucigenia-sparsa)
 
-See also the list of [contributors](https://github.com/ramellose/manca/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/ramellose/manta/contributors) who participated in this project.
 
 ## License
 
