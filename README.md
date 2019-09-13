@@ -50,7 +50,6 @@ For an elaborate demo that goes through more variables, go [here](https://ramell
 
 For documentation of specific functions, check out [the Sphinx documentation](https://ramellose.github.io/manta/index.html).
 
-All files used to test _manta_ can be downloaded [here](https://github.com/ramellose/manta/blob/master/manta_supplements.zip).
 
 ### Contributions
 
