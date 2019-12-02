@@ -315,7 +315,7 @@ def perm_edges(graph, permutations, percentile, pos, neg, error):
 
 
 def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
-                  iterations, ratio, partialperms, relperms, error, verbose):
+                  iterations, ratio, partialperms, relperms, subset, error, verbose):
     """
     Calls the rewire_graph function and robustness function
     to compute robustness of cluster assignments.
@@ -333,6 +333,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
     :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param partialperms: Number of permutations for partial diffusion.
     :param relperms: Number of permutations for reliability testing.
+    :param subset: Fraction of edges used in subsetting procedure
     :param error: Fraction of edges to rewire for reliability metric.
     :param verbose: Verbosity level of function
     :return:
@@ -361,6 +362,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
                                          min_clusters=min_clusters, min_cluster_size=min_cluster_size,
                                          iterations=iterations,
                                          ratio=ratio, edgescale=0, permutations=partialperms,
+                                         subset=subset,
                                          verbose=False)
         cluster = nx.get_node_attributes(permutation, 'cluster')
         # cluster.values() has same order as permutation.nodes

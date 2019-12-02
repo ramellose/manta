@@ -268,7 +268,7 @@ def main():
         perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
                       min_clusters=args['min'], min_cluster_size=args['ms'],
                       iterations=args['iter'], ratio=args['ratio'],
-                      partialperms=args['perm'], relperms=args['rel'],
+                      partialperms=args['perm'], relperms=args['rel'], subset=args['subset'],
                       error=args['error'], verbose=args['verbose'])
     layout = None
     if args['bin']:
