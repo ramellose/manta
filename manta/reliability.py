@@ -352,7 +352,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
         # possible number of permutations:
         # p = n! / (n - r)!
         # this number is much too large
-        relperms = dyadicpairs / numswaps
+        relperms = int(dyadicpairs / numswaps)
     for i in range(relperms):
         permutation, swapfail = rewire_graph(graph, error)
         if swapfail:
