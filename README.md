@@ -50,7 +50,7 @@ For an elaborate demo that goes through more variables, go [here](https://ramell
 
 For documentation of specific functions, check out [the Sphinx documentation](https://ramellose.github.io/manta/index.html).
 
-An archived version of _manta_, together with the files used to test the algorithm, is availabe through [Zenodo](https://zenodo.org/record/3407044#.XXtTcmZx1EY).
+An archived version of _manta_, together with the files used to test the algorithm, is availabe through [Zenodo](https://doi.org/10.5281/zenodo.3578106).
 ### Contributions
 
 This software is still in early alpha. Any feedback or bug reports will be much appreciated!
