@@ -26,7 +26,7 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
-from manta.flow import diffusion
+from manta.utils import diffusion
 from manta.cluster import cluster_graph
 from scipy.stats import binom_test, norm
 from random import choice

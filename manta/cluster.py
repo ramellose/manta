@@ -30,7 +30,8 @@ import numpy as np
 # from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
-from manta.flow import diffusion, partial_diffusion, harary_components
+from manta.utils import diffusion, harary_components
+from manta.flow import partial_diffusion
 from itertools import combinations, chain
 from copy import deepcopy
 import os
