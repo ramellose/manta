@@ -203,11 +203,11 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     """
     # get the mean of 100 assignments
     randomscores = list()
-    for i in range(100):
+    for i in range(10):
         randomclust = np.random.randint(2, size=len(scoremat))
         randomscores.append(sparsity_score(graph, randomclust, rev_index))
     scores = dict()
-    scores['random'] = np.mean(randomscores)
+    scores['random'] = np.median(randomscores)
     if verbose:
         logger.info('Sparsity level for 2 clusters, randomly assigned labels: ' + str(scores['random']))
     bestclusters = dict()
@@ -219,6 +219,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     # minimum cluster size is 10% of nodes
     minclus = len(graph) * min_cluster_size
     while clusnum < max_clusters + 1:
+        print(clusnum)
         clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(clustermat)
         counts = np.bincount(clusters)
         # then add to cluster based on shortest paths
