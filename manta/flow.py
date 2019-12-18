@@ -115,9 +115,9 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     for x in range(len(result)):
         # ocassionally, the iteration converges to zero, so this function
         # then retries the iteration
-        if not result[x]:
+        if type(result[x]) == 'NoneType':
             scoremat = result[x]
-            while not scoremat:
+            while type(scoremat) == 'NoneType':
                 scoremat = _partial_diffusion(values[0])
             result[x] = scoremat
     posfreq = np.zeros((len(graph), len(graph)))
