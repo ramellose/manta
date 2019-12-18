@@ -130,7 +130,7 @@ def set_manta():
     parser.add_argument('-ms', '--min_size',
                         dest='ms', type=float,
                         required=False,
-                        help='Minimum cluster size as fraction of network size. Default: 0.2.',
+                        help='Minimum cluster size as fraction of network size divided by cluster number. Default: 0.2.',
                         default=0.2)
     parser.add_argument('-max', '--max_clusters',
                         dest='max', type=int,

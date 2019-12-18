@@ -30,8 +30,7 @@ import numpy as np
 # from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
-from manta.utils import diffusion, harary_components
-from manta.flow import partial_diffusion
+from manta.flow import partial_diffusion, diffusion, harary_components
 from itertools import combinations, chain
 from copy import deepcopy
 import os
@@ -223,11 +222,15 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
         clusters = AgglomerativeClustering(n_clusters=clusnum).fit_predict(clustermat)
         counts = np.bincount(clusters)
         # then add to cluster based on shortest paths
-        if len(np.where(counts < minclus)[0]) > 0:
-            # if there is a cluster with fewer than 3 nodes,
+        if len(np.where(counts > (minclus / clusnum))[0]) < 2:
+            logger.warning('All nodes are binned into a single cluster for k = ' + str(clusnum))
+            scores[clusnum] = 0
+            break
+        elif len(np.where(counts < (minclus / clusnum))[0]) > 0:
+            # if there are at least 5 cluster with fewer than 3 nodes,
             # remove nodes that separate into tiny cluster
             # get cluster ID and location for this cluster
-            locs = np.where(counts < minclus)[0]
+            locs = np.where(counts < (minclus / clusnum))[0]
             # we only remove one cluster pos at a time
             # repeated clustering may assign node differently
             loc = locs[0]
@@ -254,7 +257,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
             clusnum += 1
             outliers[clusnum] = list()
             # reset scoring matrix in case different cluster assignment does assign outliers
-            clustermat = scoremat
+            clustermat = scoremat.copy()
             scoremat_index = rev_index.copy()
     topscore = max(scores, key=scores.get)
     if topscore != 'random':

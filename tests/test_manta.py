@@ -11,7 +11,7 @@ __license__ = 'Apache 2.0'
 import unittest
 import networkx as nx
 from manta.cluster import cluster_graph, sparsity_score, cluster_weak, cluster_hard, _cluster_vector
-from manta.utils import diffusion, harary_balance, harary_components
+from manta.flow import diffusion, harary_balance, harary_components
 from manta.reliability import central_edge, central_node, rewire_graph, perm_edges
 from manta.layout import generate_layout, generate_tax_weights
 from copy import deepcopy
