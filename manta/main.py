@@ -225,6 +225,14 @@ def main():
     if args['graph'] != 'demo':
         filename = args['graph'].split(sep=".")
         extension = filename[len(filename)-1]
+        # see if the file can be detected
+        # if not, try appending current working directory and then read.
+        if not os.path.isfile(args['graph']):
+            if os.path.isfile(os.getcwd() + '/' + args['graph']):
+                args['graph'] = os.getcwd() + '/'
+            else:
+                logger.error('Could not find the specified file. Is your file path correct?')
+                exit()
         try:
             if extension == 'graphml':
                 network = nx.read_graphml(args['graph'])
@@ -277,6 +285,10 @@ def main():
     if args['layout']:
         layout = generate_layout(graph, args['tax'])
     if args['fp']:
+        if not os.path.isdir(args['fp']):
+            logger.info('Supplied file path is not a complete file path. \n'
+                        'Writing to current directory.')
+            args['fp'] = os.getcwd() + '/' + args['fp']
         if args['f'] == 'graphml':
             nx.write_graphml(graph, args['fp'] + '.graphml')
         elif args['f'] == 'edgelist':
@@ -288,6 +300,8 @@ def main():
         elif args['f'] == 'cyjs':
             write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
         logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
+    else:
+        logger.error('Could not write network to disk, no file path given.')
     exit(0)
 
 
