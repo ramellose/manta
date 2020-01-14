@@ -91,7 +91,6 @@ def set_manta():
     it requires an input format that can be read by networkx."""
     parser = argparse.ArgumentParser(
         description='Run the microbial association network clustering algorithm.'
-                    'If --central is added, centrality is calculated. '
                     'Exporting as .cyjs allows for import into Cytoscape with '
                     'a cluster- and phylogeny-informed layout.')
     parser.add_argument('-i', '--input_graph',
