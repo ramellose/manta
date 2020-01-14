@@ -224,7 +224,7 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
         # then add to cluster based on shortest paths
         if len(np.where(counts > (minclus / clusnum))[0]) < 2:
             logger.warning('All nodes are binned into a single cluster for k = ' + str(clusnum))
-            scores[clusnum] = 0
+            scores[clusnum] = -1
             break
         elif len(np.where(counts < (minclus / clusnum))[0]) > 0:
             # if there are at least 5 cluster with fewer than 3 nodes,
