@@ -46,7 +46,7 @@ To run the demo, run _manta_ as follows:
 manta -i demo -o filepath_to_output_network
 ```
 
-For an elaborate demo that goes through more variables, go [here](https://ramellose.github.io/networktutorials/demo.html).
+For an elaborate demo that goes through more variables, go [here](https://ramellose.github.io/manta/demo_manta.html).
 
 For documentation of specific functions, check out [the Sphinx documentation](https://ramellose.github.io/manta/index.html).
 
