@@ -1,6 +1,6 @@
 # _manta_ ![manta](https://github.com/ramellose/manta/blob/master/manta.png)
 
-Microbial association network clustering algorithm. Check out the [preprint](https://www.biorxiv.org/content/10.1101/807511v1) for more info!
+Microbial association network clustering algorithm. Check out the [publication](https://msystems.asm.org/content/5/1/e00903-19) for more info!
 
 [![Build Status](https://travis-ci.com/ramellose/manta.svg?token=9mhqeTh13MErxyrk5zR8&branch=master)](https://travis-ci.com/ramellose/manta)
 [![HitCount](http://hits.dwyl.com/ramellose/manta.svg)](http://hits.dwyl.com/ramellose/manta)
