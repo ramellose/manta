@@ -284,10 +284,6 @@ def main():
     if args['layout']:
         layout = generate_layout(graph, args['tax'])
     if args['fp']:
-        if not os.path.isdir(args['fp']):
-            logger.info('Supplied file path is not a complete file path. \n'
-                        'Writing to current directory.')
-            args['fp'] = os.getcwd() + '/' + args['fp']
         if args['f'] == 'graphml':
             nx.write_graphml(graph, args['fp'] + '.graphml')
         elif args['f'] == 'edgelist':
