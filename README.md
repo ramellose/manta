@@ -30,6 +30,11 @@ To install _manta_, run:
 pip install git+https://github.com/ramellose/manta.git
 ```
 
+If you have both Python 2.7 installed, you may change the command to this:
+```
+python3 -m pip install git+https://github.com/ramellose/manta.git
+```
+
 To run the script, only two arguments are required: input and output filepaths.
 The script recognizes gml, graphml and cyjs files by their extension. By default, cyjs is exported.
 It also accepts text files with edge lists, with the third column containing edge weight.
