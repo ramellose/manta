@@ -30,7 +30,7 @@ To install _manta_, run:
 pip install git+https://github.com/ramellose/manta.git
 ```
 
-If you have both Python 2.7 installed, you may change the command to this:
+If you have both Python 2.7 and Python 3 installed, you may need to change the command to this:
 ```
 python3 -m pip install git+https://github.com/ramellose/manta.git
 ```
