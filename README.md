@@ -12,7 +12,7 @@ This version is still in early beta and has been tested for Python 3.6.
 
 ## Getting Started
 
-First set up a [virtual environment](https://docs.python-guide.org/dev/virtualenvs/):
+First set up a [virtual environment](https://docs.python-guide.org/dev/virtualenvs/) and make sure it uses Python 3:
 ```
 virtualenv venv
 # Linux
