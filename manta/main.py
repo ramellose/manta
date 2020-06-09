@@ -173,7 +173,7 @@ def set_manta():
                         help='Edge scale used to separate out weak cluster assignments. '
                              'The larger the edge scale, the larger the weak cluster. Default: 0.8.',
                         default=0.8)
-    parser.add_argument('-cr, --cluster_reliability', dest='cr',
+    parser.add_argument('-cr', '--cluster_reliability', dest='cr',
                         action='store_true',
                         help='If flagged, reliability of cluster assignment is computed. ', required=False)
     parser.set_defaults(cr=False)
