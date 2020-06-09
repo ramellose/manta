@@ -57,6 +57,7 @@ from manta.reliability import perm_clusters
 from manta.cyjson import write_cyjson, read_cyjson
 from manta.layout import generate_layout
 import numpy as np
+import pandas as pd
 import logging.handlers
 from pbr.version import VersionInfo
 
@@ -106,9 +107,9 @@ def set_manta():
                         default=None, required=False)
     parser.add_argument('-f', '--file_type',
                         dest='f',
-                        help='Format of output network file. Default: cyjs.',
-                        choices=['gml', 'edgelist',
-                                 'graphml', 'adj', 'cyjs'],
+                        help='Format of output network file. Default: cyjs.\n'
+                             'The csv format exports cluster assignments as a csv table.',
+                        choices=['gml', 'graphml', 'cyjs', 'csv'],
                         default='cyjs')
     parser.add_argument('-tax', '--taxonomy_table',
                         dest='tax',
@@ -286,12 +287,15 @@ def main():
     if args['fp']:
         if args['f'] == 'graphml':
             nx.write_graphml(graph, args['fp'] + '.graphml')
-        elif args['f'] == 'edgelist':
-            nx.write_weighted_edgelist(graph, args['fp'] + '.txt')
+        elif args['f'] == 'csv':
+            node_keys = graph.nodes[list(graph.nodes)[0]].keys()
+            properties = {}
+            for key in node_keys:
+                properties[key] = nx.get_node_attributes(graph, key)
+            data = pd.DataFrame(properties)
+            data.to_csv(args['fp'] + '.csv')
         elif args['f'] == 'gml':
             nx.write_gml(graph, args['fp'] + '.gml')
-        elif args['f'] == 'adj':
-            nx.write_multiline_adjlist(graph, args['fp'] + '.txt')
         elif args['f'] == 'cyjs':
             write_cyjson(graph=graph, filename=args['fp'] + '.cyjs', layout=layout)
         logger.info('Wrote clustered network to ' + args['fp'] + '.' + args['f'])
