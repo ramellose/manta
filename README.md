@@ -12,7 +12,7 @@ This version is still in early beta and has been tested for Python 3.6.
 
 ## Getting Started
 
-First set up a [virtual environment](https://docs.python-guide.org/dev/virtualenvs/):
+First set up a [virtual environment](https://docs.python-guide.org/dev/virtualenvs/) and make sure it uses Python 3:
 ```
 virtualenv venv
 # Linux
@@ -28,6 +28,11 @@ deactivate
 To install _manta_, run:
 ```
 pip install git+https://github.com/ramellose/manta.git
+```
+
+If you have both Python 2.7 and Python 3 installed, you may need to change the command to this:
+```
+python3 -m pip install git+https://github.com/ramellose/manta.git
 ```
 
 To run the script, only two arguments are required: input and output filepaths.
