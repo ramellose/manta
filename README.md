@@ -49,6 +49,18 @@ manta -i filepath_to_input_network -o filepath_to_output_network -f cyjs --layou
 
 Layouts can only be generated for .cyjs network files, which are selected with the flag -f cyjs.
 
+This tool can also generate cluster reliability scores by permuting the network and recomputing the clusters.
+The reliability scores are then calculated as confidence intervals of Jaccard Similarity indices across clusters.
+To use this function, you need to include the following functions:
+
+```
+manta -i filepath_to_input_network -o filepath_to_output_network -cr -rel 100
+```
+
+By default, manta exports a graphml file, with cluster assignments as node properties
+and the cluster reliability score exported as CI-related parameters.
+With the -f flag you can also specify other formats.
+
 For a complete explanation of all the parameters, run:
 ```
 manta -h
