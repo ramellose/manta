@@ -51,7 +51,7 @@ Layouts can only be generated for .cyjs network files, which are selected with t
 
 This tool can also generate cluster reliability scores by permuting the network and recomputing the clusters.
 The reliability scores are then calculated as confidence intervals of Jaccard Similarity indices across clusters.
-To use this function, you need to include the following functions:
+To use this function, you can add these flags:
 
 ```
 manta -i filepath_to_input_network -o filepath_to_output_network -cr -rel 100
