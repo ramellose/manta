@@ -403,6 +403,10 @@ def _core_oscillators(difmats, assignment, adj_index, rev_index, verbose):
             # in that case, mean amplitude may be low
             oscillators.append(index)
             oscillators_series.append(seq)
+    if len(oscillators) == 0:
+        logger.warning("No oscillating nodes found.\n"
+                       "No weak and strong clustering assignments can be made.\n"
+                       "Try reducing the subset parameter. ")
     oscillators = [rev_index[x] for x in oscillators]
     if verbose:
         logger.info('Found the following strong oscillators: ' + str(oscillators))

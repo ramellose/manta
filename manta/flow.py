@@ -224,7 +224,8 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     if permutations:
         subnum = permutations  # number of subnetworks generated
     b = 0
-    while b < subnum:
+    true_iterations = 0
+    while b < subnum and true_iterations < (10 * subnum):
         # only add 1 to b if below snippet completes
         # otherwise, keep iterating
         indices = sample(graph.nodes, nums)
@@ -260,6 +261,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
             # in this case, iteration is repeated
             updated_mat = updated_mat / np.max(abs(updated_mat))
         else:
+            true_iterations += 1
             break
         for value in np.nditer(updated_mat, op_flags=['readwrite']):
             if value != 0:
@@ -272,8 +274,14 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
         updated_mat = updated_mat / np.max(abs(updated_mat))
         result.append(updated_mat)
         b += 1
+        true_iterations += 1
         if verbose:
             logger.info("Partial diffusion " + str(b))
+    if true_iterations >= (10 * subnum):
+        logger.error("The matrix converged to 0 for the number of requested permutations times 10.\n"
+                     "Either this graph cannot be clustered by manta,"
+                     " or the subset parameter needs to be reduced.")
+        exit()
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
     for b in range(subnum):
