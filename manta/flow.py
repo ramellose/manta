@@ -164,7 +164,7 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
                     iterations = iters + 5
             if np.isnan(error) and not memory:
                 if verbose:
-                    logger.info('Error calculation failed at iteraiton: ' + str(iters))
+                    logger.info('Error calculation failed at iteration: ' + str(iters))
                 memory = True
                 iterations = iters + 5
         except RuntimeWarning:
