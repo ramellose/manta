@@ -200,6 +200,13 @@ def set_manta():
                         required=False,
                         default=False,
                         help='If flagged, edge weights are converted to 1 and -1. ')
+    parser.add_argument('-hb', '--harary_balance',
+                        dest='balance',
+                        required=False,
+                        help='If flagged, manta will not look for balanced components.\n'
+                             'The Harary balance function can take a lot of time for larger networks.',
+                        action='store_false',
+                        default=True)
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         required=False,
@@ -266,11 +273,17 @@ def main():
         for edge in network.edges:
             orig_edges[edge] = network.edges[edge]['weight']
             network.edges[edge]['weight'] = np.sign(network.edges[edge]['weight'])
+    # check if there are edges with weight 0
+    # these cause problems for the Harary balance algorithm
+    if sum(value == 0 for value in
+           np.any(nx.get_edge_attributes(network, 'weight').values())) > 0:
+        logger.error("Some edges in the network have a weight of exactly 0. \n"
+                     "Such edges cannot be clustered. Try converting weights to 1 and -1. ")
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
                             min_clusters=args['min'], min_cluster_size=args['ms'],
                             iterations=args['iter'], subset=args['subset'],
                             ratio=args['ratio'], edgescale=args['edgescale'],
-                            permutations=args['perm'], verbose=args['verbose'])
+                            permutations=args['perm'], verbose=args['verbose'], balance=args['balance'])
     graph = results[0]
     if args['cr']:
         perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
