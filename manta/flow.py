@@ -369,9 +369,9 @@ def harary_balance(graph):
     # Step 3: Mark v0 positive
     marks[root[0]] = 1.0
     balance = True
-    while not all(lines.values()):
+    while any(v is None for v in lines.values()):
         # Step 7: Is there a line that has not been tested?
-        while not all(marks.values()):
+        while any(v is None for v in marks.values()):
             # Step 6: Is there a value that has not been tested?
             step4 = False
             while not step4:
