@@ -84,7 +84,7 @@ For documentation of specific functions, check out [the Sphinx documentation](ht
 An archived version of _manta_, together with the files used to test the algorithm, is availabe through [Zenodo](https://doi.org/10.5281/zenodo.3578106).
 ### Contributions
 
-This software is still in early alpha. Any feedback or bug reports will be much appreciated!
+This software is still in early use. Any feedback or bug reports will be much appreciated!
 
 ## Authors
 
