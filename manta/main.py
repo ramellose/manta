@@ -75,7 +75,7 @@ logger.addHandler(sh)
 # only handler with 'w' mode, rest is 'a'
 # once this handler is started, the file writing is cleared
 # other handlers append to the file
-logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
+logpath = "\\".join(os.getcwd().split("\\")) + '\\manta.log'
 # filelog path is one folder above manta
 # pyinstaller creates a temporary folder, so log would be deleted
 fh = logging.handlers.RotatingFileHandler(maxBytes=500,
