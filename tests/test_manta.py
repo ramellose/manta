@@ -106,7 +106,7 @@ rel = 100
 error = 0.1
 edgescale = 0.5
 ratio = 0.7
-subset = 0.8
+subset = 0.2
 verbose = True
 
 tax = StringIO("""#OTU	Kingdom	Phylum	Class	Order	Family	Genus	Species

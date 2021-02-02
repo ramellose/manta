@@ -207,7 +207,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     :param graph: NetworkX graph of a microbial assocation network
     :param iterations: Maximum number of iterations to carry out
     :param limit: Percentage in error decrease until matrix is considered converged
-    :param subset: Fraction of edges used in subsetting procedure
+    :param subset: Fraction of edges set to 0 in subsetting procedure
     :param ratio: Ratio of positive / negative edges required for edge stability
     :param permutations: Number of permutations for network subsetting
     :param verbose: Verbosity level of function
@@ -282,6 +282,8 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
                      "Either this graph cannot be clustered by manta,"
                      " or the subset parameter needs to be reduced.")
         exit()
+    if len(result) == 0:
+        logger.exit("Unable to run partial diffusion. Try decreasing the subset parameter.")
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
     for b in range(subnum):
