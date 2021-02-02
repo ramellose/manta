@@ -50,7 +50,7 @@ logger.addHandler(sh)
 # only handler with 'w' mode, rest is 'a'
 # once this handler is started, the file writing is cleared
 # other handlers append to the file
-logpath = "\\".join(os.getcwd().split("\\")) + '\\manta.log'
+logpath = "\\".join(os.getcwd().split("\\")[:-1]) + '\\manta.log'
 # filelog path is one folder above manta
 # pyinstaller creates a temporary folder, so log would be deleted
 fh = logging.handlers.RotatingFileHandler(maxBytes=500,
@@ -94,12 +94,14 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         balanced = harary_components(graph, verbose=verbose).values()
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
-        if not all(balanced):
-            if verbose:
-                logger.info("Carrying out diffusion on partial graphs. ")
-            # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
-            scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit, subset=subset,
-                                                   ratio=ratio, permutations=permutations, verbose=verbose)
+        if balanced:
+            logger.info("This is a balanced network, "
+                        "so you may be able to get good results with the Kernighan-Lin algorithm.")
+        if verbose:
+            logger.info("Carrying out diffusion on partial graphs. ")
+        # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
+        scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit, subset=subset,
+                                               ratio=ratio, permutations=permutations, verbose=verbose)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if clustering can't beat this, the user is given a warning
