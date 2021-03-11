@@ -283,12 +283,15 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
                      " or the subset parameter needs to be reduced.")
         exit()
     if len(result) == 0:
-        logger.exit("Unable to run partial diffusion. Try decreasing the subset parameter.")
+        logger.error("Unable to run partial diffusion. Try decreasing the subset parameter.")
     posfreq = np.zeros((len(graph), len(graph)))
     negfreq = np.zeros((len(graph), len(graph)))
     for b in range(subnum):
-        posfreq[result[b] > 0] += 1
-        negfreq[result[b] < 0] += 1
+        try:
+            posfreq[result[b] > 0] += 1
+            negfreq[result[b] < 0] += 1
+        except IndexError:
+            logger.error("Unable to run partial diffusion. Try increasing the number of iterations.")
     # we count how many times specific values in matrix have
     # been assigned positive or negative values
     outcome = np.zeros((len(graph), len(graph)))
