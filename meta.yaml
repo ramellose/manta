@@ -1,11 +1,18 @@
-{% set data = load_setup_py_data() %}
+{% set version = "1.1.0" %}
 
 package:
   name: manta
-  version: 1.0
+  version: "{{ version }}"
 
 source:
-  git_url: https://github.com/ramellose/manta
+  url: https://github.com/ramellose/manta
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install --no-deps --ignore-installed .
+  entry_points:
+    - manta = manta.main:main
 
 requirements:
   host:
