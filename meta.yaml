@@ -1,8 +1,8 @@
-{% set version = "v1.1.0" %}
+{% set data = load_setup_py_data() %}
 
 package:
   name: manta
-  version: "{{ version }}"
+  version: {{ data.get('version') }}
 
 source:
   url: https://github.com/ramellose/manta/archive/v1.1.0.tar.gz
