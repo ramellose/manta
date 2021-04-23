@@ -13,7 +13,7 @@ build:
   number: 0
   script: python -m pip install .
   entry_points:
-    - anuran = anuran.main:main
+    - manta = manta.main:main
 
 requirements:
   host:
