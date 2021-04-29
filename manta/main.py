@@ -270,6 +270,10 @@ def main():
            np.any(nx.get_edge_attributes(network, 'weight').values())) > 0:
         logger.error("Some edges in the network have a weight of exactly 0. \n"
                      "Such edges cannot be clustered. Try converting weights to 1 and -1. ")
+    weight_properties = nx.get_edge_attributes(network, 'weight')
+    if len(weight_properties) == 0:
+        logger.error("The imported network has no 'weight' edge property. \n"
+                     "Please make sure you are formatting the network correctly. ")
     results = cluster_graph(network, limit=args['limit'], max_clusters=args['max'],
                             min_clusters=args['min'], min_cluster_size=args['ms'],
                             iterations=args['iter'], subset=args['subset'],
