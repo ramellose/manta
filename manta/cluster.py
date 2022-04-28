@@ -27,6 +27,7 @@ __license__ = 'Apache 2.0'
 
 import networkx as nx
 import numpy as np
+import random
 # from sklearn.mixture import GaussianMixture  #  This works quite well, slightly better Sn
 from sklearn.cluster import AgglomerativeClustering
 import sys
@@ -62,7 +63,7 @@ logger.addHandler(fh)
 
 
 def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
-                  iterations, subset, ratio, edgescale, permutations, verbose):
+                  iterations, subset, ratio, edgescale, permutations, seed=11111, verbose=True):
     """
     Takes a networkx graph and carries out network clustering.
     The returned graph contains cluster assignments and weak assignments.
@@ -80,15 +81,16 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     :param ratio: Ratio of scores that need to be positive or negative for a stable edge
     :param edgescale: Mean edge weight for node removal
     :param permutations: Number of permutations for partial iterations
+    :param seed: Integer of seed, 11111 means no seed is used
     :param verbose: Verbosity level of function
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
     
     # suggested additions by Theresa
     # the seed 123 should be replaced with the input seed
-    # perhaps this addition also requires importing the random module above (line 28)
-    np.random.seed(123)
-    random.seed(123)
+    if seed != 11111:
+        np.random.seed(seed)
+        random.seed(seed)
     
     adj_index = dict()
     for i in range(len(graph.nodes)):
