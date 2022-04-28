@@ -200,6 +200,12 @@ def set_manta():
                         required=False,
                         default=False,
                         help='If flagged, edge weights are converted to 1 and -1. ')
+    parser.add_argument('-seed', '--seed',
+                        dest='seed',
+                        required=False,
+                        help='Specify seed. The default value (11111) means no seed is used.',
+                        type=int,
+                        default=11111)
     parser.add_argument('-v', '--verbose',
                         dest='verbose',
                         required=False,
@@ -278,7 +284,8 @@ def main():
                             min_clusters=args['min'], min_cluster_size=args['ms'],
                             iterations=args['iter'], subset=args['subset'],
                             ratio=args['ratio'], edgescale=args['edgescale'],
-                            permutations=args['perm'], verbose=args['verbose'])
+                            permutations=args['perm'], seed=args['seed'],
+                            verbose=args['verbose'])
     graph = results[0]
     if args['cr']:
         perm_clusters(graph=graph, limit=args['limit'], max_clusters=args['max'],
