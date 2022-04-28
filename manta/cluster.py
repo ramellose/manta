@@ -83,6 +83,13 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     :param verbose: Verbosity level of function
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
+    
+    # suggested additions by Theresa
+    # the seed 123 should be replaced with the input seed
+    # perhaps this addition also requires importing the random module above (line 28)
+    np.random.seed(123)
+    random.seed(123)
+    
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
