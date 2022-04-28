@@ -54,7 +54,7 @@ manta -i filepath_to_input_network -o filepath_to_output_network -cr -rel 100
 
 By default, manta exports a graphml file, with cluster assignments as node properties
 and the cluster reliability score exported as CI-related parameters.
-With the -f flag you can also specify other formats.
+With the -f flag you can also specify other formats. With the -seed flag you can specify a random seed in case results need to be reproducible. 
 
 For a complete explanation of all the parameters, run:
 ```
