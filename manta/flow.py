@@ -37,7 +37,7 @@ __license__ = 'Apache 2.0'
 
 
 import sys
-from random import sample
+import random
 import networkx as nx
 import numpy as np
 import os
@@ -190,7 +190,7 @@ def diffusion(graph, iterations, limit, verbose, norm=True, inflation=True):
     return scoremat, memory, diffs
 
 
-def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, verbose):
+def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, verbose, seed):
     """
     Partial diffusion process for generation of scoring matrix.
     Some matrices may be unable to reach convergence
@@ -213,6 +213,9 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     :param verbose: Verbosity level of function
     :return: score matrix, memory effect, initial diffusion matrix
     """
+    
+    random.seed(seed)
+
     # scoremat indices are ordered by graph.nodes()
     scoremat = nx.to_numpy_array(graph)
     mat_index = {list(graph.nodes)[i]: i for i in range(len(graph.nodes))}
@@ -228,12 +231,12 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     while b < subnum and true_iterations < (10 * subnum):
         # only add 1 to b if below snippet completes
         # otherwise, keep iterating
-        indices = sample(graph.nodes, nums)
+        indices = random.sample(graph.nodes, nums)
         num_indices = [mat_index[i] for i in indices]
         subgraph = nx.subgraph(graph, indices)
         # we randomly sample from the nodes and create a subgraph from this
         # this can give multiple connected components
-        balanced = harary_components(subgraph, verbose=False)
+        balanced = harary_components(subgraph, verbose=False, seed=seed)
         # if there is a balanced component, carry out network flow separately
         balanced_matrix = np.copy(scoremat)
         if any(balanced.values()):
@@ -316,7 +319,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, ver
     return outcome, result
 
 
-def harary_components(graph, verbose):
+def harary_components(graph, verbose, seed):
     """
     This wrapper for the balance test can accept graphs
     that consist of multiple  connected components.
@@ -335,7 +338,7 @@ def harary_components(graph, verbose):
             if len(component) > 1:
                 all_components.append(nx.subgraph(graph, component))
     for component in all_components:
-        component_balance[component] = harary_balance(component)
+        component_balance[component] = harary_balance(component, seed)
     if verbose:
         if all(component_balance.values()) and len(component_balance.values()) == 1:
             logger.info("Graph is balanced.")
@@ -349,7 +352,7 @@ def harary_components(graph, verbose):
     return component_balance
 
 
-def harary_balance(graph):
+def harary_balance(graph, seed):
     """
     Checks whether a graph is balanced according to Harary's theorem.
     Python implementation of the algorithm as described in the article below.
@@ -364,13 +367,16 @@ def harary_balance(graph):
     :return: Returns a dictionary with connected components as keys;
              components that are balanced have a True value.
     """
+    
+    random.seed(seed)
+
     # Step 1: Select a spanning tree T
     balance = True
     tree = nx.algorithms.minimum_spanning_tree(graph)
     marks = dict.fromkeys(tree.nodes)
     lines = dict.fromkeys(graph.edges)
     # Step 2: Root T at an arbitrary point v0
-    root = sample(tree.nodes, 1)
+    root = random.sample(tree.nodes, 1)
     # Step 3: Mark v0 positive
     marks[root[0]] = 1.0
     balance = True
@@ -389,7 +395,7 @@ def harary_balance(graph):
                     match = set(nx.neighbors(tree, unsign)).intersection(signed)
                     if len(match) > 0:
                         step4 = True
-                        match = sample(match, 1)[0]
+                        match = random.sample(match, 1)[0]
                         # Step 5: Label the selected point with the product
                         # of the sign of the previously point to which it is
                         # adjacent in T and the sign of the line joining them
@@ -402,7 +408,7 @@ def harary_balance(graph):
         # it is possible that all lines have been tested;
         # in this case, the graph is balanced for sure
         if not all(lines.values()):
-            untested = sample([i for i in lines if not lines[i]], 1)[0]
+            untested = random.sample([i for i in lines if not lines[i]], 1)[0]
             # Step 9: Is the sign of the selected line equal to the product
             # of the signs of its two points?
             untested_sign = marks[untested[0]] * marks[untested[1]]
