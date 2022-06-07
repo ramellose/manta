@@ -85,13 +85,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     :param verbose: Verbosity level of function
     :return: NetworkX graph, score matrix and diffusion matrix.
     """
-    
-    # suggested additions by Theresa
-    # the seed 123 should be replaced with the input seed
-    if seed != 11111:
-        np.random.seed(seed)
-        random.seed(seed)
-    
+        
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
@@ -215,7 +209,8 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     # get the mean of 100 assignments
     randomscores = list()
     for i in range(5):
-        randomclust = np.random.randint(2, size=len(scoremat))
+        rng = np.random.default_rng(seed+i)
+        randomclust = rng.integers(2, size=len(scoremat))
         randomscores.append(sparsity_score(graph, randomclust, rev_index))
     scores = dict()
     scores['random'] = np.median(randomscores)
