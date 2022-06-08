@@ -117,7 +117,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     # select optimal cluster by sparsity score
     bestcluster = cluster_hard(graph=graph, adj_index=adj_index, rev_index=rev_index, scoremat=scoremat,
                                max_clusters=max_clusters,
-                               min_clusters=min_clusters, min_cluster_size=min_cluster_size, verbose=verbose)
+                               min_clusters=min_clusters, min_cluster_size=min_cluster_size, seed=seed, verbose=verbose)
     flatcluster = _cluster_vector(bestcluster, adj_index)
     if not all(balanced):
         weak_nodes = cluster_weak(graph, diffs=diffs, cluster=flatcluster,
