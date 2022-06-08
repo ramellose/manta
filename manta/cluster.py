@@ -110,7 +110,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
             logger.info("Carrying out diffusion on partial graphs. ")
         # ratio from 0.7 to 0.9 appears to give good results on 3 clusters
         scoremat, partials = partial_diffusion(graph=graph, iterations=iterations, limit=limit, subset=subset,
-                                               ratio=ratio, permutations=permutations, verbose=verbose)
+                                               ratio=ratio, permutations=permutations, seed=seed, verbose=verbose)
     bestcluster = None
     # the randomclust is a random separation into two clusters
     # if clustering can't beat this, the user is given a warning
@@ -193,7 +193,7 @@ def sparsity_score(graph, clusters, rev_index):
 
 
 def cluster_hard(graph, adj_index, rev_index, scoremat,
-                 max_clusters, min_clusters, min_cluster_size, verbose):
+                 max_clusters, min_clusters, min_cluster_size, seed=11111, verbose=False):
     """
     Agglomerative clustering is used to separate nodes based on the scoring matrix.
     Because the scoring matrix generally results in separation of 'central' nodes,
@@ -209,13 +209,18 @@ def cluster_hard(graph, adj_index, rev_index, scoremat,
     :param max_clusters: Maximum cluster number
     :param min_clusters: Minimum cluster number
     :param min_cluster_size: Minimum cluster size as fraction of network size
+    :param seed: Random seed, if 11111 no random seed is used
     :param verbose: Verbosity level of function
     :return: Dictionary of nodes with cluster assignments
     """
     # get the mean of 100 assignments
     randomscores = list()
     for i in range(5):
-        randomclust = np.random.randint(2, size=len(scoremat))
+        if seed != 11111:
+            rng = np.random.default_rng(seed + i)
+            randomclust = rng.integers(2, size=len(scoremat))
+        else:
+            randomclust = np.random.randint(2, size=len(scoremat))
         randomscores.append(sparsity_score(graph, randomclust, rev_index))
     scores = dict()
     scores['random'] = np.median(randomscores)
