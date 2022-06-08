@@ -214,6 +214,8 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, see
     :param verbose: Verbosity level of function
     :return: score matrix, memory effect, initial diffusion matrix
     """
+    if seed != 11111:
+      random.seed(seed)
     # scoremat indices are ordered by graph.nodes()
     scoremat = nx.to_numpy_array(graph)
     mat_index = {list(graph.nodes)[i]: i for i in range(len(graph.nodes))}
