@@ -193,7 +193,7 @@ def sparsity_score(graph, clusters, rev_index):
 
 
 def cluster_hard(graph, adj_index, rev_index, scoremat,
-                 max_clusters, min_clusters, min_cluster_size, verbose):
+                 max_clusters, min_clusters, min_cluster_size, seed=11111, verbose=False):
     """
     Agglomerative clustering is used to separate nodes based on the scoring matrix.
     Because the scoring matrix generally results in separation of 'central' nodes,
