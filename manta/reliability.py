@@ -364,6 +364,7 @@ def perm_clusters(graph, limit, max_clusters, min_clusters, min_cluster_size,
     lowerCI = dict()
     upperCI = dict()
     for node in nodejaccards:
+        logger.info('test:' + nodejaccards[node])
         lowerCI[node] = np.ndarray.item(nodejaccards[node][0])
         upperCI[node] = np.ndarray.item(nodejaccards[node][1])
         ci_width[node] = np.ndarray.item(ci_width[node])
