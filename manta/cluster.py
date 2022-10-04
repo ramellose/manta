@@ -88,10 +88,10 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
     
     # suggested additions by Theresa
     # the seed 123 should be replaced with the input seed
-    if seed != 11111:
+    if seed == 11111:
         np.random.seed(seed)
         random.seed(seed)
-    
+
     adj_index = dict()
     for i in range(len(graph.nodes)):
         adj_index[list(graph.nodes)[i]] = i
@@ -103,7 +103,7 @@ def cluster_graph(graph, limit, max_clusters, min_clusters, min_cluster_size,
         balanced = harary_components(graph, verbose=verbose).values()
         # partial diffusion results in unclosed graphs for directed graphs,
         # and can therefore not be used here.
-        if balanced and verbose:
+        if balanced:
             logger.info("This is a balanced network, "
                         "so you may be able to get good results with the Kernighan-Lin algorithm.")
         if verbose:
