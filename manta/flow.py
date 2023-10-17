@@ -231,7 +231,7 @@ def partial_diffusion(graph, iterations, limit, subset, ratio, permutations, see
     while b < subnum and true_iterations < (10 * subnum):
         # only add 1 to b if below snippet completes
         # otherwise, keep iterating
-        indices = random.sample(graph.nodes, nums)
+        indices = random.sample(list(graph.nodes), nums)
         num_indices = [mat_index[i] for i in indices]
         subgraph = nx.subgraph(graph, indices)
         # we randomly sample from the nodes and create a subgraph from this
@@ -396,7 +396,7 @@ def harary_balance(graph, seed=11111):
                     match = set(nx.neighbors(tree, unsign)).intersection(signed)
                     if len(match) > 0:
                         step4 = True
-                        match = random.sample(match, 1)[0]
+                        match = random.sample(list(match), 1)[0]
                         # Step 5: Label the selected point with the product
                         # of the sign of the previously point to which it is
                         # adjacent in T and the sign of the line joining them
