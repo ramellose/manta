@@ -377,7 +377,7 @@ def harary_balance(graph, seed=11111):
     marks = dict.fromkeys(tree.nodes)
     lines = dict.fromkeys(graph.edges)
     # Step 2: Root T at an arbitrary point v0
-    root = random.sample(tree.nodes, 1)
+    root = random.sample(list(tree.nodes), 1)
     # Step 3: Mark v0 positive
     marks[root[0]] = 1.0
     balance = True
